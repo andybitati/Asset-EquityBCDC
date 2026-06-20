@@ -1,0 +1,1 @@
+"""Assets EquityBCDC backend package."""

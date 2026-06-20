@@ -1,0 +1,279 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #1f2937;
+  background: #f8f7f5;
+}
+
+body, html, #root {
+  margin: 0;
+  min-height: 100%;
+  background: #f8f7f5;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+  background: #f8f7f5;
+}
+
+.sidebar {
+  padding: 32px 20px;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.brand-logo {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: #b60f1e;
+  color: white;
+  font-weight: 800;
+  font-size: 1.2rem;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.brand-subtitle {
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.sidebar button {
+  border: none;
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: transparent;
+  color: #374151;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar button.active,
+.sidebar button:hover {
+  background: #fce8e8;
+  color: #b60f1e;
+}
+
+.content {
+  padding: 30px;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.page-header h2 {
+  margin: 0;
+  font-size: 1.9rem;
+  color: #111827;
+}
+
+.page-header button {
+  background: #b60f1e;
+  color: white;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 22px;
+}
+
+.panel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.06);
+}
+
+.grid.two-up {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.stock-list {
+  display: grid;
+  gap: 14px;
+}
+
+.stock-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.form-panel label,
+.auth-card label {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.password-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.password-toggle {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: white;
+  color: #374151;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  background: #f8fafc;
+}
+
+.form-panel input,
+.form-panel select,
+.form-panel textarea,
+.auth-card input {
+  width: 100%;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  color: #111827;
+  padding: 14px;
+}
+
+.form-panel textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.button-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+button {
+  border: none;
+  border-radius: 14px;
+  padding: 14px 22px;
+  color: white;
+  background: #b60f1e;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  background: #8c0b16;
+}
+
+.table-panel table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-panel th,
+.table-panel td {
+  text-align: left;
+  padding: 14px 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table-panel th {
+  color: #4b5563;
+  font-weight: 700;
+}
+
+.error-message,
+.info-message {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 14px;
+}
+
+.error-message {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.info-message {
+  background: #f8fafc;
+  color: #374151;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f7f5 100%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 480px;
+  background: white;
+  padding: 36px;
+  border-radius: 32px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+.auth-card h1 {
+  margin-top: 0;
+  color: #111827;
+}
+
+.auth-card p {
+  color: #4b5563;
+  margin-bottom: 28px;
+}
+
+.auth-card form {
+  display: grid;
+  gap: 18px;
+}
