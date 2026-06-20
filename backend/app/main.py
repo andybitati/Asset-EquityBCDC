@@ -1,6 +1,7 @@
 import os
 import asyncio
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,14 +13,23 @@ from .models import (
     MovementType,
     ForecastResponse,
 )
-from .storage import append_movement, load_movements
-from .auth import authenticate_user, get_current_user
+from .storage import append_movement, load_movements, init_db
+from .auth import authenticate_user, get_current_user, get_user_profile, security, TOKENS
+from fastapi import Security
+from fastapi.security import HTTPAuthorizationCredentials
 from .realtime import manager
 
+load_dotenv()
+
 app = FastAPI(title="Assets EquityBCDC Backend")
+allow_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,38 +40,38 @@ app.mount(
     name="data",
 )
 
-movements = load_movements()
-next_id = max((m.id for m in movements), default=0) + 1
-
-inventory = {
-    EquipmentType.desktop: 0,
-    EquipmentType.laptop: 0,
-    EquipmentType.screen: 0,
-    EquipmentType.other: 0,
-}
-for record in movements:
-    if record.movement_type == MovementType.entry:
-        inventory[record.equipment_type] += record.quantity
-    else:
-        inventory[record.equipment_type] -= record.quantity
+init_db()
 
 
-def persist_movement(record: MovementRecord) -> None:
-    append_movement(record)
+def compute_inventory(movements_list):
+    inventory = {
+        EquipmentType.desktop: 0,
+        EquipmentType.laptop: 0,
+        EquipmentType.screen: 0,
+        EquipmentType.other: 0,
+    }
+    for record in movements_list:
+        if record.movement_type == MovementType.entry:
+            inventory[record.equipment_type] += record.quantity
+        else:
+            inventory[record.equipment_type] -= record.quantity
+    return inventory
 
 
-def update_inventory(record: MovementRecord) -> None:
-    if record.movement_type == MovementType.entry:
-        inventory[record.equipment_type] += record.quantity
-    else:
-        inventory[record.equipment_type] -= record.quantity
+def get_inventory_data():
+    movements_list = load_movements()
+    return {k.value: v for k, v in compute_inventory(movements_list).items()}
 
 
 def build_forecast() -> ForecastResponse:
-    last_30 = [m for m in movements if m.movement_type == MovementType.exit and m.timestamp >= datetime.utcnow() - timedelta(days=30)]
+    movements_list = load_movements()
+    last_30 = [
+        m for m in movements_list
+        if m.movement_type == MovementType.exit and m.timestamp >= datetime.utcnow() - timedelta(days=30)
+    ]
     total_exit = sum(m.quantity for m in last_30)
     avg_daily = total_exit / 30 if total_exit else 0.0
-    current_stock = sum(inventory.values())
+    current_stock = sum(get_inventory_data().values())
     reorder_threshold = max(10, int(avg_daily * 5 + 5))
     estimated_days = current_stock / avg_daily if avg_daily > 0 else None
     recommendation = (
@@ -82,14 +92,26 @@ def login(payload: AuthRequest):
     return {"access_token": token, "token_type": "bearer"}
 
 
+@app.post("/logout")
+def logout(credentials: HTTPAuthorizationCredentials = Security(security)):
+    token = credentials.credentials
+    TOKENS.pop(token, None)
+    return {"status": "ok"}
+
+
 @app.get("/inventory")
 def get_inventory(current_user: str = get_current_user):
     return {"inventory": {k.value: v for k, v in inventory.items()}}
 
 
+@app.get("/me")
+def get_me(current_user: str = get_current_user):
+    return {"user": get_user_profile(current_user)}
+
+
 @app.get("/movements")
 def get_movements(current_user: str = get_current_user):
-    return {"movements": [m.dict() for m in movements]}
+    return {"movements": [m.dict() for m in load_movements()]}
 
 
 @app.get("/forecast")
@@ -99,9 +121,8 @@ def get_forecast(current_user: str = get_current_user):
 
 @app.post("/entries")
 def add_entry(item: EquipmentItem, background_tasks: BackgroundTasks, current_user: str = get_current_user):
-    global next_id
     record = MovementRecord(
-        id=next_id,
+        id=0,
         timestamp=datetime.utcnow(),
         movement_type=MovementType.entry,
         equipment_type=item.equipment_type,
@@ -111,24 +132,21 @@ def add_entry(item: EquipmentItem, background_tasks: BackgroundTasks, current_us
         destination=item.destination,
         notes=item.notes,
     )
-    next_id += 1
-    movements.append(record)
-    update_inventory(record)
-    background_tasks.add_task(persist_movement, record)
+    persisted = append_movement(record)
     asyncio.create_task(manager.broadcast({
-        "inventory": {k.value: v for k, v in inventory.items()},
+        "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
     }))
-    return {"status": "ok", "movement": record.dict()}
+    return {"status": "ok", "movement": persisted.dict()}
 
 
 @app.post("/exits")
 def add_exit(item: EquipmentItem, background_tasks: BackgroundTasks, current_user: str = get_current_user):
-    global next_id
+    inventory = compute_inventory(load_movements())
     if inventory[item.equipment_type] < item.quantity:
         return {"status": "error", "detail": "Stock insuffisant pour ce type de matériel."}
     record = MovementRecord(
-        id=next_id,
+        id=0,
         timestamp=datetime.utcnow(),
         movement_type=MovementType.exit,
         equipment_type=item.equipment_type,
@@ -138,15 +156,12 @@ def add_exit(item: EquipmentItem, background_tasks: BackgroundTasks, current_use
         destination=item.destination,
         notes=item.notes,
     )
-    next_id += 1
-    movements.append(record)
-    update_inventory(record)
-    background_tasks.add_task(persist_movement, record)
+    persisted = append_movement(record)
     asyncio.create_task(manager.broadcast({
-        "inventory": {k.value: v for k, v in inventory.items()},
+        "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
     }))
-    return {"status": "ok", "movement": record.dict()}
+    return {"status": "ok", "movement": persisted.dict()}
 
 
 @app.websocket("/ws/updates")
@@ -162,10 +177,8 @@ async def websocket_updates(websocket: WebSocket):
 @app.post("/notify")
 def notify_update(current_user: str = get_current_user):
     payload = {
-        "inventory": {k.value: v for k, v in inventory.items()},
+        "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
     }
-    import asyncio
-
     asyncio.create_task(manager.broadcast(payload))
     return {"status": "broadcast_sent"}

@@ -6,7 +6,8 @@ export default function ExportPage({ token }) {
   const downloadCsv = async () => {
     setStatus(null)
     try {
-      const response = await fetch('http://127.0.0.1:8000/data/stock_log.csv')
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+      const response = await fetch(`${apiUrl}/data/stock_log.csv`)
       if (!response.ok) {
         throw new Error('Fichier introuvable')
       }

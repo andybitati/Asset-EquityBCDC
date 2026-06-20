@@ -3,3 +3,5 @@ uvicorn[standard]>=0.30.0
 python-multipart>=0.0.10
 pydantic==2.8.0
 python-dotenv==1.0.0
+SQLAlchemy>=2.0.0
+PyMySQL>=1.1.0

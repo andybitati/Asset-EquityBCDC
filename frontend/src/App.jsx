@@ -5,7 +5,7 @@ import InventoryPage from './pages/Inventory'
 import MovementsPage from './pages/Movements'
 import ExportPage from './pages/Export'
 import NavBar from './components/NavBar'
-import { fetchInventory, fetchForecast, fetchMovements } from './services/api'
+import { fetchCurrentUser, fetchInventory, fetchForecast, fetchMovements, logoutRequest } from './services/api'
 
 const pages = {
   dashboard: DashboardPage,
@@ -20,9 +20,11 @@ export default function App() {
   const [inventory, setInventory] = useState({})
   const [forecast, setForecast] = useState(null)
   const [movements, setMovements] = useState([])
+  const [user, setUser] = useState(null)
 
   useEffect(() => {
     if (!token) return
+    fetchCurrentUser(token).then(data => setUser(data.user || null))
     fetchInventory(token).then(data => setInventory(data.inventory || {}))
     fetchForecast(token).then(setForecast)
     fetchMovements(token).then(data => setMovements(data.movements || []))
@@ -30,7 +32,8 @@ export default function App() {
 
   useEffect(() => {
     if (!token) return
-    const ws = new WebSocket('ws://127.0.0.1:8000/ws/updates')
+    const wsUrl = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/ws/updates`
+    const ws = new WebSocket(wsUrl)
     ws.onopen = () => console.log('WebSocket connecté')
     ws.onmessage = event => {
       const payload = JSON.parse(event.data)
@@ -45,10 +48,20 @@ export default function App() {
     return <LoginPage onLogin={setToken} />
   }
 
+  const handleLogout = async () => {
+    try {
+      await logoutRequest(token)
+    } catch (e) {
+      // ignore errors
+    }
+    setToken(null)
+    setUser(null)
+  }
+
   const CurrentPage = pages[page] || DashboardPage
   return (
     <div className="app-shell">
-      <NavBar active={page} onNavigate={setPage} />
+      <NavBar active={page} user={user} onNavigate={setPage} onLogout={handleLogout} />
       <main className="content">
         <CurrentPage
           token={token}
@@ -56,6 +69,7 @@ export default function App() {
           forecast={forecast}
           movements={movements}
           refresh={() => {
+            fetchCurrentUser(token).then(data => setUser(data.user || null))
             fetchInventory(token).then(data => setInventory(data.inventory || {}))
             fetchForecast(token).then(setForecast)
             fetchMovements(token).then(data => setMovements(data.movements || []))
