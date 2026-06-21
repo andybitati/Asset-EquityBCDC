@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
+import { normalizeBusinessText } from '../utils/text'
 
 const chartColors = ['#b60f1e', '#f5a400', '#2563eb', '#059669', '#7c3aed', '#0891b2', '#ea580c', '#4b5563']
 
@@ -22,58 +23,49 @@ function buildHistory(movements) {
   return Array.from(byDate.entries()).map(([date, values]) => ({ date, ...values }))
 }
 
-export default function DashboardPage({ inventory, stockItems = [], movements = [], forecast, user, refresh }) {
-  const [query, setQuery] = useState('')
-  const chartData = Object.entries(inventory).map(([name, value]) => ({ name, value }))
+function matchesSearch(record, normalizedQuery) {
+  if (!normalizedQuery) return true
+  return [
+    record.equipment_type,
+    record.serial_number,
+    record.model,
+    record.destination,
+    record.taken_by,
+    record.initiated_by,
+    record.notes,
+    record.movement_type,
+  ].filter(Boolean).some(value => String(value).toLowerCase().includes(normalizedQuery))
+}
+
+export default function DashboardPage({ inventory, stockItems = [], movements = [], forecast, searchTerm = '' }) {
+  const normalizedQuery = searchTerm.trim().toLowerCase()
+  const filteredStockItems = stockItems.filter(item => matchesSearch(item, normalizedQuery))
+  const filteredMovementsForStats = movements.filter(record => matchesSearch(record, normalizedQuery))
+  const displayInventory = normalizedQuery
+    ? filteredStockItems.reduce((totals, item) => {
+        totals[item.equipment_type] = (totals[item.equipment_type] || 0) + item.quantity
+        return totals
+      }, {})
+    : inventory
+  const chartData = Object.entries(displayInventory).map(([name, value]) => ({ name, value }))
   const totalStock = chartData.reduce((sum, item) => sum + item.value, 0)
-  const totalEntries = movements.filter(item => item.movement_type === 'Entrée').reduce((sum, item) => sum + item.quantity, 0)
-  const totalExits = movements.filter(item => item.movement_type === 'Sortie').reduce((sum, item) => sum + item.quantity, 0)
+  const totalEntries = filteredMovementsForStats.filter(item => item.movement_type === 'Entrée').reduce((sum, item) => sum + item.quantity, 0)
+  const totalExits = filteredMovementsForStats.filter(item => item.movement_type === 'Sortie').reduce((sum, item) => sum + item.quantity, 0)
   const activeTypes = chartData.filter(item => item.value > 0).length
-  const history = useMemo(() => buildHistory(movements), [movements])
+  const history = useMemo(() => buildHistory(filteredMovementsForStats), [filteredMovementsForStats])
   const risks = [...(forecast?.risks || [])]
+    .filter(item => !normalizedQuery || item.equipment_type.toLowerCase().includes(normalizedQuery))
     .sort((a, b) => Number(b.exits_locked) - Number(a.exits_locked) || a.current_stock - b.current_stock)
     .slice(0, 4)
-  const normalizedQuery = query.trim().toLowerCase()
-  const filteredMovements = movements.filter(record => {
-    if (!normalizedQuery) return true
-    return [
-      record.equipment_type,
-      record.serial_number,
-      record.model,
-      record.destination,
-      record.taken_by,
-      record.initiated_by,
-      record.notes,
-      record.movement_type,
-    ].filter(Boolean).some(value => String(value).toLowerCase().includes(normalizedQuery))
-  }).slice(-8).reverse()
+  const filteredMovements = filteredMovementsForStats.slice(-8).reverse()
 
   return (
     <div className="page dashboard-page">
-      <div className="dashboard-topbar">
-        <div>
-          <span className="eyebrow">Assets Equity BCDC</span>
-          <h2>Gestion du stock informatique</h2>
+      {normalizedQuery && (
+        <div className="search-result-banner">
+          Résultat de recherche pour <strong>{searchTerm}</strong>
         </div>
-        <div className="dashboard-actions">
-          <input
-            className="search-input"
-            value={query}
-            onChange={event => setQuery(event.target.value)}
-            placeholder="Rechercher type, modèle, série..."
-          />
-          {user && (
-            <div className="dashboard-user">
-              <img src={user.photo_url} alt={user.display_name} />
-              <div>
-                <strong>{user.display_name || user.username}</strong>
-                <span>{user.role || user.username}</span>
-              </div>
-            </div>
-          )}
-          <button onClick={refresh}>Actualiser</button>
-        </div>
-      </div>
+      )}
 
       <div className="kpi-grid">
         <div className="kpi-card">
@@ -122,6 +114,11 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
               ))}
             </LineChart>
           </ResponsiveContainer>
+          <p className="chart-explanation">
+            Cette courbe montre le stock net disponible dans le temps. Une entrée fait monter la courbe du type concerné,
+            une sortie la fait descendre. Elle ne sépare donc pas les entrées et les sorties : elle affiche le résultat
+            final après chaque mouvement.
+          </p>
         </div>
 
         <div className="panel">
@@ -181,7 +178,7 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
                 <div>
                   <strong>{record.equipment_type}</strong>
                   <span>{record.serial_number || '-'} / {record.model || '-'}</span>
-                  <span>{record.destination || '-'} {record.taken_by ? `- ${record.taken_by}` : ''}</span>
+                  <span>{normalizeBusinessText(record.destination) || '-'} {record.taken_by ? `- ${record.taken_by}` : ''}</span>
                   <span>Initié par: {record.initiated_by || '-'}</span>
                 </div>
                 <div>
@@ -201,7 +198,7 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
       <div className="panel table-panel">
         <div className="panel-heading">
           <h3>Matériels disponibles</h3>
-          <span>{stockItems.length} élément(s) traçables</span>
+          <span>{filteredStockItems.length} élément(s) traçables</span>
         </div>
         <table>
           <thead>
@@ -213,11 +210,11 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
             </tr>
           </thead>
           <tbody>
-            {stockItems.map(item => (
+            {filteredStockItems.map(item => (
               <tr key={item.material_id}>
                 <td>{item.equipment_type}</td>
-                <td>{item.serial_number || '-'}</td>
-                <td>{item.model || '-'}</td>
+                <td>{normalizeBusinessText(item.serial_number) || '-'}</td>
+                <td>{normalizeBusinessText(item.model) || '-'}</td>
                 <td>{item.quantity}</td>
               </tr>
             ))}

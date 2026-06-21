@@ -1,3 +1,5 @@
+import { normalizeBusinessText } from '../utils/text'
+
 export default function MovementsPage({ movements }) {
   return (
     <div className="page movements-page">
@@ -27,11 +29,11 @@ export default function MovementsPage({ movements }) {
                 <td>{record.movement_type}</td>
                 <td>{record.equipment_type}</td>
                 <td>{record.quantity}</td>
-                <td>{record.serial_number || '-'} / {record.model || '-'}</td>
-                <td>{record.destination || '-'}</td>
-                <td>{record.taken_by || '-'}</td>
+                <td>{normalizeBusinessText(record.serial_number) || '-'} / {normalizeBusinessText(record.model) || '-'}</td>
+                <td>{normalizeBusinessText(record.destination) || '-'}</td>
+                <td>{normalizeBusinessText(record.taken_by) || '-'}</td>
                 <td>{record.initiated_by || '-'}</td>
-                <td>{record.notes || '-'}</td>
+                <td>{normalizeBusinessText(record.notes) || '-'}</td>
                 <td>{new Date(record.timestamp).toLocaleString()}</td>
               </tr>
             ))}

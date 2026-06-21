@@ -55,7 +55,7 @@ Exemple local :
 
 ```env
 DATABASE_URL=mysql+pymysql://asset_equity_user:ChangeMe123!@127.0.0.1:3306/asset_equity
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+CORS_ORIGINS=http://localhost:48621,http://127.0.0.1:48621
 SESSION_TTL_MINUTES=60
 MAX_LOGIN_ATTEMPTS=5
 LOGIN_LOCK_MINUTES=15
@@ -66,7 +66,7 @@ Exemple réseau :
 
 ```env
 DATABASE_URL=mysql+pymysql://asset_equity_user:MotDePasseFort@IP_DU_SERVEUR_MYSQL:3306/asset_equity
-CORS_ORIGINS=http://IP_DU_POSTE:5173
+CORS_ORIGINS=http://IP_DU_POSTE:48621
 ```
 
 ## 4. Vérifier la connexion depuis l’application
@@ -88,13 +88,13 @@ Si la connexion est correcte, le backend démarre sans erreur.
 Backend :
 
 ```text
-http://localhost:8000
+http://localhost:48620
 ```
 
 Frontend :
 
 ```text
-http://localhost:5173
+http://localhost:48621
 ```
 
 ## 6. Points obligatoires en production bancaire

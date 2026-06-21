@@ -2,12 +2,12 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from .config import BACKEND_DIR, load_backend_env, runtime_dir
+from .config import load_backend_env, writable_runtime_dir
 
 
 load_backend_env()
 
-LOG_DIR = os.getenv("LOG_DIR", os.path.join(runtime_dir(), "logs"))
+LOG_DIR = os.getenv("LOG_DIR", os.path.join(writable_runtime_dir(), "logs"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 MAX_BYTES = int(os.getenv("LOG_MAX_BYTES", "5242880"))
 BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "5"))

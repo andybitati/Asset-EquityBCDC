@@ -42,6 +42,10 @@ class AdminUserCreate(BaseModel):
     role: str = "user"
     photo_url: Optional[str] = None
 
+class PhotoUpload(BaseModel):
+    filename: str
+    data_url: str
+
 class EquipmentBase(BaseModel):
     material_id: Optional[int] = None
     equipment_type: EquipmentType = Field(..., alias="type")
@@ -58,22 +62,6 @@ class EquipmentBase(BaseModel):
 class EquipmentItem(EquipmentBase):
     serial_number: Optional[str] = None
     model: Optional[str] = None
-
-    @field_validator("serial_number", "model", mode="before", check_fields=False)
-    def require_serial_model_for_core(cls, v, info):
-        equipment_type = info.data.get("equipment_type")
-        tracked_types = {
-            EquipmentType.desktop,
-            EquipmentType.laptop,
-            EquipmentType.screen,
-            EquipmentType.switch,
-            EquipmentType.router,
-        }
-        if equipment_type in tracked_types:
-            if not v:
-                field_name = info.field_name
-                raise ValueError(f"{field_name} est obligatoire pour les équipements {equipment_type}")
-        return v
 
 class ForecastRisk(BaseModel):
     equipment_type: EquipmentType

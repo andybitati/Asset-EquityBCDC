@@ -26,30 +26,16 @@ ON DUPLICATE KEY UPDATE
 
 CREATE TABLE IF NOT EXISTS materials (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  equipment_type VARCHAR(20) NOT NULL,
+  equipment_type VARCHAR(40) NOT NULL,
   serial_number VARCHAR(255),
   model VARCHAR(255),
   description TEXT,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS movements (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  material_id INT,
-  timestamp DATETIME NOT NULL,
-  movement_type VARCHAR(20) NOT NULL,
-  equipment_type VARCHAR(20) NOT NULL,
-  quantity INT NOT NULL,
-  serial_number VARCHAR(255),
-  model VARCHAR(255),
-  destination VARCHAR(255),
-  taken_by VARCHAR(255),
-  initiated_by VARCHAR(255),
-  notes TEXT,
-  CONSTRAINT fk_movements_material
-    FOREIGN KEY (material_id) REFERENCES materials(id)
-    ON DELETE SET NULL
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_materials_equipment_type
+    FOREIGN KEY (equipment_type) REFERENCES equipment_types(name)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -65,6 +51,33 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS movements (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  material_id INT,
+  timestamp DATETIME NOT NULL,
+  movement_type VARCHAR(20) NOT NULL,
+  equipment_type VARCHAR(40) NOT NULL,
+  quantity INT NOT NULL,
+  serial_number VARCHAR(255),
+  model VARCHAR(255),
+  destination VARCHAR(255),
+  taken_by VARCHAR(255),
+  initiated_by VARCHAR(80),
+  notes TEXT,
+  CONSTRAINT fk_movements_material
+    FOREIGN KEY (material_id) REFERENCES materials(id)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_movements_equipment_type
+    FOREIGN KEY (equipment_type) REFERENCES equipment_types(name)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_movements_initiated_by
+    FOREIGN KEY (initiated_by) REFERENCES users(username)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   actor_username VARCHAR(80),
@@ -75,7 +88,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   new_value TEXT,
   ip_address VARCHAR(80),
   user_agent VARCHAR(500),
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_audit_logs_actor
+    FOREIGN KEY (actor_username) REFERENCES users(username)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -84,7 +101,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   username VARCHAR(80) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at DATETIME NOT NULL,
-  revoked_at DATETIME
+  revoked_at DATETIME,
+  CONSTRAINT fk_sessions_user
+    FOREIGN KEY (username) REFERENCES users(username)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE
 );
 
 INSERT INTO users (username, display_name, password_hash, role, photo_url)

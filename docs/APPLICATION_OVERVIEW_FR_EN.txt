@@ -1,0 +1,175 @@
+ASSETS EQUITY BCDC - DESCRIPTION DE L'APPLICATION / APPLICATION OVERVIEW
+Version 1.0.0
+
+============================================================
+FRANCAIS SIMPLE
+============================================================
+
+1. Role de l'application
+Assets Equity BCDC est une application de gestion de stock pour les materiels informatiques de la Banque Equity BCDC.
+Elle aide a suivre les entrees, les sorties, les quantites restantes et les alertes de commande.
+
+2. Materiels suivis
+L'application peut suivre plusieurs types de materiels, par exemple :
+- Ecrans
+- Laptops
+- Desktops
+- Souris
+- Claviers
+- Switchs
+- Routeurs
+- Autres materiels informatiques
+
+3. Entrees de stock
+Une entree ajoute du materiel dans le depot.
+Pour une entree, l'utilisateur renseigne le type, la quantite et une description si necessaire.
+Le numero de serie et le modele ne sont pas exiges a l'entree.
+Chaque entree est horodatee.
+Le nom de l'utilisateur qui fait le mouvement est conserve.
+
+4. Sorties de stock
+Une sortie ne peut pas etre creee librement.
+Elle doit concerner un materiel deja present dans le stock.
+Cela evite de sortir un equipement qui n'existe pas ou qui n'est pas disponible.
+
+Pour une sortie, l'application garde :
+- le materiel sorti
+- le numero de serie
+- le modele
+- la destination
+- la personne qui a pris le materiel
+- l'utilisateur qui a initie le mouvement
+- la date et l'heure
+- les notes ou description
+
+5. Tableau de bord
+Le tableau de bord montre :
+- les quantites disponibles par type de materiel
+- les alertes de stock faible
+- les alertes de commande
+- les statistiques principales
+- le nom de l'utilisateur connecte
+- l'evolution du stock sous forme graphique
+
+Le graphique d'evolution du stock montre le stock net disponible dans le temps.
+Une entree fait monter la courbe du type de materiel concerne.
+Une sortie fait descendre cette courbe.
+Le graphique ne separe pas les entrees et les sorties : il montre le resultat final apres chaque mouvement.
+
+6. Alertes et seuils
+L'application calcule la consommation moyenne journaliere a partir des sorties recentes.
+Cette moyenne sert a estimer combien de jours le stock peut encore tenir.
+
+Seuil de commande :
+Quand le stock devient faible par rapport a la consommation, l'application affiche une alerte rouge pour recommander une commande.
+
+Seuil de reserve d'urgence :
+Quand le stock atteint un niveau critique, l'application bloque les sorties normales.
+Le reste du stock doit etre garde pour les urgences jusqu'a de nouvelles entrees.
+
+7. Securite
+Chaque utilisateur doit se connecter avec un identifiant et un mot de passe.
+Les mots de passe doivent respecter une politique forte :
+- au moins 8 caracteres
+- au moins une lettre majuscule
+- au moins un chiffre
+- au moins un caractere special
+
+L'application garde aussi des journaux d'audit pour tracer les actions importantes.
+
+8. Gestion des utilisateurs
+Un utilisateur peut modifier ses informations personnelles selon les regles prevues.
+Un utilisateur standard ne peut pas modifier ses identifiants trop souvent.
+L'admin peut gerer les utilisateurs, mais ne doit pas changer le mot de passe d'un autre utilisateur.
+
+9. Confidentialite
+Les donnees traitees concernent une banque.
+Elles doivent rester confidentielles.
+L'acces a la base, aux fichiers logs et aux sauvegardes doit etre limite aux personnes autorisees.
+
+
+============================================================
+EASY ENGLISH
+============================================================
+
+1. Application purpose
+Assets Equity BCDC is an inventory management application for IT equipment at Equity BCDC Bank.
+It helps track stock entries, stock exits, remaining quantities, and reorder alerts.
+
+2. Equipment tracked
+The application can track many equipment types, for example:
+- Screens
+- Laptops
+- Desktops
+- Mice
+- Keyboards
+- Switches
+- Routers
+- Other IT equipment
+
+3. Stock entries
+A stock entry adds equipment into the warehouse.
+For a stock entry, the user enters the equipment type, the quantity, and a description if needed.
+The serial number and exact model are not required at entry time.
+Each entry is timestamped.
+The user who creates the movement is also stored.
+
+4. Stock exits
+A stock exit cannot be created freely.
+It must be linked to equipment that already exists in stock.
+This prevents users from removing equipment that does not exist or is not available.
+
+For each exit, the application stores:
+- the equipment removed
+- the serial number
+- the model
+- the destination
+- the person who received the equipment
+- the user who initiated the movement
+- date and time
+- notes or description
+
+5. Dashboard
+The dashboard shows:
+- available quantities by equipment type
+- low-stock alerts
+- reorder alerts
+- main statistics
+- the connected user's name
+- stock evolution charts
+
+The stock evolution chart shows the net available stock over time.
+A stock entry increases the line for the related equipment type.
+A stock exit decreases that line.
+The chart does not separate entries and exits: it shows the final stock result after each movement.
+
+6. Alerts and thresholds
+The application calculates the average daily consumption from recent exits.
+This average is used to estimate how many days the current stock can last.
+
+Reorder threshold:
+When stock becomes low compared to consumption, the application shows a red alert recommending a new order.
+
+Emergency reserve threshold:
+When stock reaches a critical level, normal exits are blocked.
+The remaining stock must be kept for emergencies until new entries arrive.
+
+7. Security
+Each user must log in with a username and password.
+Passwords must follow a strong policy:
+- at least 8 characters
+- at least one uppercase letter
+- at least one digit
+- at least one special character
+
+The application also keeps audit logs for important actions.
+
+8. User management
+A user can update personal information according to defined rules.
+A standard user cannot change credentials too often.
+The admin can manage users, but must not change another user's password.
+
+9. Confidentiality
+The data belongs to a banking environment.
+It must remain confidential.
+Access to the database, log files, and backups must be limited to authorized people only.

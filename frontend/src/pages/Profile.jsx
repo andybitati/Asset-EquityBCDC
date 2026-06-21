@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { createUser, deleteUser, fetchUsers, updateCurrentUser, updateUser } from '../services/api'
+import { createUser, deleteUser, fetchUsers, updateCurrentUser, updateUser, uploadUserPhoto } from '../services/api'
+
+const avatarOptions = [
+  '/avatar-admin.svg',
+  '/avatar-manager.svg',
+  '/avatar-user-red.svg',
+  '/avatar-user-gold.svg',
+  '/avatar-user-gray.svg',
+  '/avatar-auditor.svg',
+]
 
 function defaultForm(user) {
   return {
@@ -11,11 +20,36 @@ function defaultForm(user) {
   }
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(new Error('Lecture de la photo impossible.'))
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function ProfilePage({ token, user, refresh }) {
   const [form, setForm] = useState(defaultForm(user))
   const [newUser, setNewUser] = useState({ username: '', display_name: '', password: '', role: 'user', photo_url: '' })
   const [users, setUsers] = useState([])
   const [message, setMessage] = useState(null)
+
+  const uploadPhoto = async (file, applyPhotoUrl) => {
+    if (!file) return
+    setMessage(null)
+    try {
+      const dataUrl = await readFileAsDataUrl(file)
+      const response = await uploadUserPhoto(token, {
+        filename: file.name,
+        data_url: dataUrl,
+      })
+      applyPhotoUrl(response.photo_url)
+      setMessage('Photo chargée. Pensez à enregistrer le profil.')
+    } catch (err) {
+      setMessage(err.message || 'Upload de la photo impossible.')
+    }
+  }
 
   useEffect(() => {
     setForm(defaultForm(user))
@@ -97,7 +131,7 @@ export default function ProfilePage({ token, user, refresh }) {
 
       <div className="panel profile-panel">
         <div className="profile-preview">
-          <img src={form.photo_url || '/equity-bank-logo.png'} alt={form.display_name || form.username} />
+          <img src={form.photo_url || '/avatar-user-red.svg'} alt={form.display_name || form.username} />
           <div>
             <h3>{form.display_name || form.username}</h3>
             <span>{user?.role || 'user'}</span>
@@ -116,6 +150,30 @@ export default function ProfilePage({ token, user, refresh }) {
             Photo utilisateur
             <input value={form.photo_url} onChange={e => setForm({ ...form, photo_url: e.target.value })} placeholder="URL ou chemin de la photo" />
           </label>
+          <div className="photo-tools">
+            <span>Choisir un avatar</span>
+            <div className="avatar-picker">
+              {avatarOptions.map(avatar => (
+                <button
+                  type="button"
+                  key={avatar}
+                  className={form.photo_url === avatar ? 'selected' : ''}
+                  onClick={() => setForm({ ...form, photo_url: avatar })}
+                  aria-label="Choisir cet avatar"
+                >
+                  <img src={avatar} alt="" />
+                </button>
+              ))}
+            </div>
+            <label className="file-upload">
+              Charger une photo locale
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={e => uploadPhoto(e.target.files?.[0], photo_url => setForm(prev => ({ ...prev, photo_url })))}
+              />
+            </label>
+          </div>
           <label>
             Mot de passe actuel
             <input type="password" value={form.current_password} onChange={e => setForm({ ...form, current_password: e.target.value })} />
@@ -143,6 +201,30 @@ export default function ProfilePage({ token, user, refresh }) {
             <input value={newUser.photo_url} onChange={e => setNewUser({ ...newUser, photo_url: e.target.value })} placeholder="Photo URL" />
             <button type="button" onClick={addUser}>Créer utilisateur</button>
           </div>
+          <div className="admin-photo-tools">
+            <span>Photo du nouvel utilisateur</span>
+            <div className="avatar-picker">
+              {avatarOptions.map(avatar => (
+                <button
+                  type="button"
+                  key={avatar}
+                  className={newUser.photo_url === avatar ? 'selected' : ''}
+                  onClick={() => setNewUser({ ...newUser, photo_url: avatar })}
+                  aria-label="Choisir cet avatar"
+                >
+                  <img src={avatar} alt="" />
+                </button>
+              ))}
+            </div>
+            <label className="file-upload compact">
+              Upload local
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={e => uploadPhoto(e.target.files?.[0], photo_url => setNewUser(prev => ({ ...prev, photo_url })))}
+              />
+            </label>
+          </div>
           <table>
             <thead>
               <tr>
@@ -157,7 +239,28 @@ export default function ProfilePage({ token, user, refresh }) {
             <tbody>
               {users.map(item => (
                 <tr key={item.username}>
-                  <td><img className="table-avatar" src={item.photo_url || '/equity-bank-logo.png'} alt={item.display_name} /></td>
+                  <td>
+                    <div className="table-photo-editor">
+                      <img className="table-avatar" src={item.photo_url || '/avatar-user-red.svg'} alt={item.display_name} />
+                      <select
+                        value={item.photo_url || ''}
+                        onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, photo_url: e.target.value } : row))}
+                      >
+                        <option value="">Avatar par défaut</option>
+                        {avatarOptions.map(avatar => (
+                          <option key={avatar} value={avatar}>{avatar.replace('/', '').replace('.svg', '')}</option>
+                        ))}
+                      </select>
+                      <label className="file-upload compact">
+                        Upload
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          onChange={e => uploadPhoto(e.target.files?.[0], photo_url => setUsers(users.map(row => row.username === item.username ? { ...row, photo_url } : row)))}
+                        />
+                      </label>
+                    </div>
+                  </td>
                   <td><input value={item.username} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, original_username: row.original_username || row.username, username: e.target.value } : row))} /></td>
                   <td><input value={item.display_name} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, display_name: e.target.value } : row))} /></td>
                   <td><input value={item.role} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, role: e.target.value } : row))} /></td>

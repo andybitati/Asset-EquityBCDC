@@ -1,8 +1,10 @@
 import os
-import asyncio
 import csv
 import io
 import logging
+import base64
+import re
+import uuid
 from datetime import datetime, timedelta
 from math import ceil
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
@@ -20,10 +22,11 @@ from .models import (
     MovementRecord,
     MovementType,
     ForecastResponse,
+    PhotoUpload,
     StockItem,
     UserProfileUpdate,
 )
-from .storage import append_movement, load_movements, init_db, engine
+from .storage import append_movement, load_movements, init_db, engine, STORAGE_DIR
 from .auth import authenticate_user, get_current_user, get_user_profile, hash_password, revoke_token, security, TOKENS, validate_password_policy, verify_password, password_policy_message
 from fastapi import Security
 from fastapi.security import HTTPAuthorizationCredentials
@@ -39,7 +42,7 @@ security_logger = logging.getLogger("assets_equity.security")
 app = FastAPI(title="Assets EquityBCDC Backend")
 allow_origins = [
     origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:48621,http://127.0.0.1:48621").split(",")
     if origin.strip()
 ]
 app.add_middleware(
@@ -49,7 +52,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+data_dir = STORAGE_DIR
 os.makedirs(data_dir, exist_ok=True)
 app.mount(
     "/data",
@@ -60,6 +63,10 @@ app.mount(
 init_db()
 
 CREDENTIAL_CHANGE_INTERVAL_DAYS = 90
+UPLOAD_DIR = os.path.join(STORAGE_DIR, "uploads")
+ALLOWED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+ALLOWED_PHOTO_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_PHOTO_BYTES = 2 * 1024 * 1024
 
 
 def require_admin(username: str) -> dict:
@@ -130,6 +137,47 @@ def serialize_user(row) -> dict:
         "is_active": bool(row["is_active"]),
         "last_credentials_changed_at": row["last_credentials_changed_at"],
     }
+
+
+def normalize_business_text(value):
+    if value is None:
+        return ""
+    return str(value).replace("Depot IT", "Dépôt IT")
+
+
+def save_uploaded_photo(payload: PhotoUpload, username: str) -> str:
+    match = re.match(r"^data:(?P<mime>[-\w.]+/[-\w.+]+);base64,(?P<data>.+)$", payload.data_url)
+    if not match:
+        raise HTTPException(status_code=400, detail="Format de photo invalide.")
+
+    mime_type = match.group("mime").lower()
+    if mime_type not in ALLOWED_PHOTO_MIME_TYPES:
+        raise HTTPException(status_code=400, detail="Format accepté : JPG, PNG, WEBP ou GIF.")
+
+    extension = os.path.splitext(payload.filename or "")[1].lower()
+    if extension not in ALLOWED_PHOTO_EXTENSIONS:
+        extension = {
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+            "image/gif": ".gif",
+        }[mime_type]
+
+    try:
+        content = base64.b64decode(match.group("data"), validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Photo illisible.")
+
+    if len(content) > MAX_PHOTO_BYTES:
+        raise HTTPException(status_code=400, detail="La photo ne doit pas dépasser 2 Mo.")
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    safe_username = re.sub(r"[^a-zA-Z0-9_-]+", "-", username).strip("-") or "user"
+    filename = f"{safe_username}-{uuid.uuid4().hex}{extension}"
+    path = os.path.join(UPLOAD_DIR, filename)
+    with open(path, "wb") as photo_file:
+        photo_file.write(content)
+    return f"/data/uploads/{filename}"
 
 
 def compute_inventory(movements_list):
@@ -386,6 +434,13 @@ def list_users(current_user: str = Depends(get_current_user)):
     return {"users": [serialize_user(row) for row in rows]}
 
 
+@app.post("/users/photo")
+def upload_user_photo(payload: PhotoUpload, request: Request, current_user: str = Depends(get_current_user)):
+    photo_url = save_uploaded_photo(payload, current_user)
+    audit_log(current_user, "upload_user_photo", "user", current_user, new_value=photo_url, request=request)
+    return {"photo_url": photo_url}
+
+
 @app.post("/users")
 def admin_create_user(payload: AdminUserCreate, request: Request, current_user: str = Depends(get_current_user)):
     require_admin(current_user)
@@ -515,19 +570,20 @@ def add_entry(item: EquipmentItem, background_tasks: BackgroundTasks, request: R
         material_id=item.material_id,
         equipment_type=item.equipment_type,
         quantity=item.quantity,
-        serial_number=item.serial_number,
-        model=item.model,
-        destination=item.destination,
-        taken_by=item.taken_by,
+        serial_number=None,
+        model=None,
+        destination=None,
+        taken_by=None,
         initiated_by=current_user,
         notes=item.notes,
     )
     persisted = append_movement(record)
-    asyncio.create_task(manager.broadcast({
+    background_tasks.add_task(manager.broadcast, {
         "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
         "stock_items": [stock_item.dict() for stock_item in build_stock_items()],
-    }))
+        "movements": [movement.dict() for movement in load_movements()],
+    })
     audit_log(current_user, "create_entry", "movement", str(persisted.id), new_value=persisted.json(), request=request)
     return {"status": "ok", "movement": persisted.dict()}
 
@@ -535,6 +591,10 @@ def add_entry(item: EquipmentItem, background_tasks: BackgroundTasks, request: R
 @app.post("/exits")
 def add_exit(item: EquipmentItem, background_tasks: BackgroundTasks, request: Request, current_user: str = Depends(get_current_user)):
     require_roles(current_user, {"admin", "user", "manager"})
+    if not item.serial_number or not item.serial_number.strip():
+        raise HTTPException(status_code=400, detail="Le numéro de série est obligatoire pour une sortie.")
+    if not item.model or not item.model.strip():
+        raise HTTPException(status_code=400, detail="Le modèle est obligatoire pour une sortie.")
     if not item.destination or not item.destination.strip():
         raise HTTPException(status_code=400, detail="La destination est obligatoire pour une sortie.")
     if not item.taken_by or not item.taken_by.strip():
@@ -560,11 +620,12 @@ def add_exit(item: EquipmentItem, background_tasks: BackgroundTasks, request: Re
         notes=item.notes,
     )
     persisted = append_movement(record)
-    asyncio.create_task(manager.broadcast({
+    background_tasks.add_task(manager.broadcast, {
         "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
         "stock_items": [stock_item.dict() for stock_item in build_stock_items()],
-    }))
+        "movements": [movement.dict() for movement in load_movements()],
+    })
     audit_log(current_user, "create_exit", "movement", str(persisted.id), new_value=persisted.json(), request=request)
     return {"status": "ok", "movement": persisted.dict()}
 
@@ -573,7 +634,8 @@ def add_exit(item: EquipmentItem, background_tasks: BackgroundTasks, request: Re
 def export_movements_csv(request: Request, current_user: str = Depends(get_current_user)):
     require_roles(current_user, {"admin", "manager", "auditor"})
     output = io.StringIO()
-    writer = csv.writer(output)
+    output.write("\ufeff")
+    writer = csv.writer(output, delimiter=";")
     writer.writerow([
         "id", "material_id", "timestamp", "movement_type", "equipment_type",
         "quantity", "serial_number", "model", "destination", "taken_by",
@@ -587,17 +649,17 @@ def export_movements_csv(request: Request, current_user: str = Depends(get_curre
             movement.movement_type.value,
             movement.equipment_type.value,
             movement.quantity,
-            movement.serial_number or "",
-            movement.model or "",
-            movement.destination or "",
-            movement.taken_by or "",
-            movement.initiated_by or "",
-            movement.notes or "",
+            normalize_business_text(movement.serial_number),
+            normalize_business_text(movement.model),
+            normalize_business_text(movement.destination),
+            normalize_business_text(movement.taken_by),
+            normalize_business_text(movement.initiated_by),
+            normalize_business_text(movement.notes),
         ])
     audit_log(current_user, "export_movements_csv", "export", request=request)
     return Response(
         content=output.getvalue(),
-        media_type="text/csv",
+        media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=movements.csv"},
     )
 
@@ -613,14 +675,14 @@ async def websocket_updates(websocket: WebSocket):
 
 
 @app.post("/notify")
-def notify_update(current_user: str = Depends(get_current_user)):
+def notify_update(background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     require_roles(current_user, {"admin", "manager"})
     payload = {
         "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
         "stock_items": [stock_item.dict() for stock_item in build_stock_items()],
     }
-    asyncio.create_task(manager.broadcast(payload))
+    background_tasks.add_task(manager.broadcast, payload)
     return {"status": "broadcast_sent"}
 
 

@@ -72,6 +72,7 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
+    stored_hash = (stored_hash or "").strip()
     if stored_hash.startswith("pbkdf2_sha256$"):
         _, iterations, salt, expected = stored_hash.split("$", 3)
         digest = hashlib.pbkdf2_hmac(
@@ -83,7 +84,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
         return secrets.compare_digest(digest, expected)
 
     legacy_sha256 = hashlib.sha256(password.encode("utf-8")).hexdigest()
-    return secrets.compare_digest(legacy_sha256, stored_hash)
+    return secrets.compare_digest(legacy_sha256, stored_hash.lower())
 
 
 def is_legacy_password_hash(stored_hash: str) -> bool:

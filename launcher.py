@@ -20,7 +20,7 @@ def python_executable():
     return sys.executable
 
 def start_backend(python_exec):
-    cmd = [python_exec, "-m", "uvicorn", "backend.app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+    cmd = [python_exec, "-m", "uvicorn", "backend.app.main:app", "--reload", "--host", "0.0.0.0", "--port", "48620"]
     # Open in new console window on Windows
     if os.name == 'nt':
         subprocess.Popen(["cmd.exe", "/c", "start", "", *cmd], cwd=str(ROOT))
@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
     # Wait a few seconds then open browser
     time.sleep(6)
-    url = "http://localhost:5173"
+    url = "http://localhost:48621"
     print(f"Ouverture du navigateur: {url}")
     webbrowser.open(url)
 

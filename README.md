@@ -2,7 +2,7 @@
 
 Assets Equity BCDC est une application web de gestion de stock des matériels informatiques de la Banque Equity BCDC.
 
-Elle permet de suivre les entrées et sorties de matériels comme les écrans, laptops, desktops, souris, switchs, routeurs, claviers et autres équipements. Chaque mouvement est horodaté, lié à l’utilisateur qui l’a initié, et conserve les informations de destination, de bénéficiaire et de description.
+Elle permet de suivre les entrées et sorties de matériels comme les écrans, laptops, desktops, souris, switchs, routeurs, claviers et autres équipements. Chaque mouvement est horodaté et lié à l’utilisateur qui l’a initié. Les entrées conservent surtout le type, la quantité et la description, tandis que les sorties conservent aussi les informations détaillées de matériel, de destination et de bénéficiaire.
 
 ## Objectif
 
@@ -33,8 +33,8 @@ La base contient les tables principales suivantes :
 La table `materials` représente le matériel lui-même :
 
 - type de matériel ;
-- numéro de série ;
-- modèle ;
+- numéro de série lorsque l’équipement est identifié précisément à la sortie ;
+- modèle lorsque l’équipement est identifié précisément à la sortie ;
 - description ;
 - dates de création et de mise à jour.
 
@@ -59,15 +59,9 @@ La table `movements` contient le journal complet :
 
 Une entrée ajoute du matériel au stock.
 
-Pour les types suivants, le numéro de série et le modèle sont obligatoires :
+À l’entrée, l’utilisateur renseigne uniquement le type de matériel, la quantité et une description ou note si nécessaire. Le numéro de série, le modèle, la destination et la personne bénéficiaire ne sont pas exigés à ce stade.
 
-- `Ecran`
-- `Laptop`
-- `Desktop`
-- `Switch`
-- `Routeur`
-
-Si le matériel n’existe pas encore dans `materials`, il est créé automatiquement, puis le mouvement d’entrée est enregistré.
+Si le matériel n’existe pas encore dans `materials`, il est créé automatiquement comme matériel générique du type concerné, puis le mouvement d’entrée est enregistré.
 
 ### Sortie de matériel
 
@@ -75,6 +69,9 @@ Une sortie ne peut pas être saisie librement. Elle doit obligatoirement concern
 
 Pour chaque sortie, l’utilisateur doit renseigner :
 
+- le matériel déjà présent en stock ;
+- le numéro de série à sortir ;
+- le modèle précis ;
 - la destination du matériel ;
 - la personne qui prend le matériel ;
 - une description ou note de sortie si nécessaire.
@@ -247,6 +244,8 @@ La barre de recherche permet de retrouver un mouvement par :
 - utilisateur qui a initié le mouvement ;
 - description.
 
+Le graphique d’évolution du stock affiche le stock net disponible dans le temps. Une entrée augmente la courbe du type concerné, une sortie la diminue. Le graphique ne sépare donc pas les entrées et les sorties : il montre le résultat final après chaque mouvement.
+
 ## Authentification
 
 Chaque utilisateur doit se connecter avant d’accéder à l’application.
@@ -328,8 +327,8 @@ Le lancement recommandé se fait avec :
 
 Cela démarre :
 
-- le backend sur `http://localhost:8000` ;
-- le frontend sur `http://localhost:5173` ;
+- le backend sur `http://localhost:48620` ;
+- le frontend sur `http://localhost:48621` ;
 - le navigateur vers l’interface web.
 
 Un raccourci Bureau peut être créé avec :
@@ -401,7 +400,7 @@ docs/WINDOWS_INSTALLER.md
 Backend seul :
 
 ```powershell
-.\venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+.\venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 48620
 ```
 
 Frontend seul :

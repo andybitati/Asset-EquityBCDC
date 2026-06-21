@@ -1,0 +1,161 @@
+ASSETS EQUITY BCDC - GUIDE D'INSTALLATION / INSTALLATION GUIDE
+Version 1.0.0
+
+============================================================
+FRANCAIS SIMPLE
+============================================================
+
+1. Objectif
+Ce fichier explique comment installer et lancer Assets Equity BCDC sur un ordinateur Windows.
+L'installation est prevue pour fonctionner hors ligne. Elle ne telecharge pas Python, Node.js, npm ou d'autres outils externes.
+
+2. Fichier a utiliser
+Utiliser le fichier :
+AssetsEquityBCDC-Setup.exe
+
+3. Installation
+1. Copier AssetsEquityBCDC-Setup.exe sur l'ordinateur cible.
+2. Faire clic droit sur le fichier.
+3. Choisir "Executer en tant qu'administrateur".
+4. Suivre les etapes de l'assistant d'installation.
+5. Laisser le dossier propose par defaut si aucune instruction contraire n'est donnee :
+   C:\Program Files\Assets Equity BCDC
+6. A la fin, l'assistant peut lancer automatiquement l'application.
+
+4. Lancement de l'application
+Apres installation, lancer l'application avec :
+- le raccourci sur le Bureau : Assets Equity BCDC
+- ou le menu Demarrer : Assets Equity BCDC
+
+L'application demarre un serveur local et ouvre l'interface web.
+Adresse par defaut :
+http://127.0.0.1:48620
+
+5. Fichiers de donnees et logs
+Les donnees locales et les fichiers logs sont crees dans :
+C:\ProgramData\Assets Equity BCDC
+
+Les principaux dossiers sont :
+- data : base locale si MySQL n'est pas configure
+- logs : fichiers journaux applicatifs et securite
+
+6. Connexion a MySQL en production
+En production, il est recommande d'utiliser MySQL.
+Creer un fichier .env dans le dossier d'installation de l'application, a cote de AssetsEquityBCDC.exe.
+
+Exemple :
+DATABASE_URL=mysql+pymysql://utilisateur:motdepasse@serveur:3306/assets_equity
+
+Remplacer :
+- utilisateur par l'utilisateur MySQL
+- motdepasse par le mot de passe MySQL
+- serveur par l'adresse IP ou le nom DNS du serveur MySQL
+- assets_equity par le nom de la base de donnees
+
+Important :
+Ne pas partager le fichier .env publiquement. Il contient des informations sensibles.
+
+7. Creation de la base MySQL
+Le script SQL est installe dans :
+C:\Program Files\Assets Equity BCDC\database\mysql-init.sql
+
+Procedure simple :
+1. Ouvrir MySQL Workbench.
+2. Se connecter au serveur MySQL.
+3. Ouvrir le fichier mysql-init.sql.
+4. Executer le script.
+5. Verifier que la base et les tables sont creees.
+6. Lancer Assets Equity BCDC.
+
+8. Verification rapide
+Si l'application demarre correctement :
+- le navigateur affiche la page de connexion
+- les utilisateurs peuvent se connecter
+- les entrees et sorties de stock peuvent etre traitees
+
+9. Desinstallation
+Utiliser :
+Parametres Windows > Applications > Assets Equity BCDC > Desinstaller
+
+Les logs et donnees peuvent rester dans ProgramData selon la politique interne de la banque.
+Les supprimer uniquement si l'equipe informatique confirme que c'est autorise.
+
+
+============================================================
+EASY ENGLISH
+============================================================
+
+1. Purpose
+This file explains how to install and start Assets Equity BCDC on a Windows computer.
+The installer is designed to work offline. It does not download Python, Node.js, npm, or external tools.
+
+2. File to use
+Use this file:
+AssetsEquityBCDC-Setup.exe
+
+3. Installation
+1. Copy AssetsEquityBCDC-Setup.exe to the target computer.
+2. Right-click the file.
+3. Choose "Run as administrator".
+4. Follow the installation wizard.
+5. Keep the default folder unless your IT team gives another instruction:
+   C:\Program Files\Assets Equity BCDC
+6. At the end, the wizard can start the application automatically.
+
+4. Starting the application
+After installation, start the application with:
+- the Desktop shortcut: Assets Equity BCDC
+- or the Start menu: Assets Equity BCDC
+
+The application starts a local server and opens the web interface.
+Default address:
+http://127.0.0.1:48620
+
+5. Data and log files
+Local data and log files are created here:
+C:\ProgramData\Assets Equity BCDC
+
+Main folders:
+- data: local database if MySQL is not configured
+- logs: application and security log files
+
+6. MySQL connection in production
+In production, MySQL is recommended.
+Create a .env file in the application installation folder, next to AssetsEquityBCDC.exe.
+
+Example:
+DATABASE_URL=mysql+pymysql://user:password@server:3306/assets_equity
+
+Replace:
+- user with the MySQL user
+- password with the MySQL password
+- server with the MySQL server IP address or DNS name
+- assets_equity with the database name
+
+Important:
+Do not share the .env file publicly. It contains sensitive information.
+
+7. Creating the MySQL database
+The SQL script is installed here:
+C:\Program Files\Assets Equity BCDC\database\mysql-init.sql
+
+Simple procedure:
+1. Open MySQL Workbench.
+2. Connect to the MySQL server.
+3. Open mysql-init.sql.
+4. Run the script.
+5. Check that the database and tables are created.
+6. Start Assets Equity BCDC.
+
+8. Quick check
+If the application starts correctly:
+- the browser shows the login page
+- users can log in
+- stock entries and exits can be processed
+
+9. Uninstall
+Use:
+Windows Settings > Apps > Assets Equity BCDC > Uninstall
+
+Logs and data may remain in ProgramData depending on the bank policy.
+Delete them only if the IT team confirms that it is allowed.

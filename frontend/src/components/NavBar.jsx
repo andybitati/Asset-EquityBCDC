@@ -3,7 +3,7 @@ export default function NavBar({ active, user, onNavigate, onLogout }) {
     <nav className="sidebar">
       <div className="brand">
         <div className="brand-logo-frame">
-          <img className="brand-logo-img" src="/equity-bank-logo.png" alt="Equity Logo" />
+          <img className="brand-logo-img" src="/assets-equity-logo.png" alt="Assets Equity BCDC" />
         </div>
         <div className="brand-text">
           <span className="brand-title">Assets</span>
@@ -12,7 +12,7 @@ export default function NavBar({ active, user, onNavigate, onLogout }) {
       </div>
       {user && (
         <div className="user-profile">
-          <img className="user-avatar" src={user.photo_url} alt={user.display_name} />
+          <img className="user-avatar" src={user.photo_url || '/avatar-user-red.svg'} alt={user.display_name} />
           <div className="user-info">
             <strong>{user.display_name}</strong>
             <span>{user.username}</span>
@@ -27,7 +27,7 @@ export default function NavBar({ active, user, onNavigate, onLogout }) {
         <button className={active === 'audit' ? 'active' : ''} onClick={() => onNavigate('audit')}>Audit</button>
       )}
       <button className={active === 'profile' ? 'active' : ''} onClick={() => onNavigate('profile')}>Profil</button>
-      <div style={{ marginTop: 'auto' }}>
+      <div className="sidebar-logout">
         <button className="logout-button" onClick={() => onLogout && onLogout()}>Déconnexion</button>
       </div>
     </nav>
