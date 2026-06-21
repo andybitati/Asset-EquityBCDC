@@ -1,0 +1,21 @@
+import os
+import threading
+import time
+import webbrowser
+
+import uvicorn
+
+from backend.app.main import app
+
+
+def open_browser():
+    time.sleep(2)
+    webbrowser.open("http://127.0.0.1:8000")
+
+
+if __name__ == "__main__":
+    host = os.getenv("ASSET_EQUITY_HOST", "127.0.0.1")
+    port = int(os.getenv("ASSET_EQUITY_PORT", "8000"))
+    if os.getenv("ASSET_EQUITY_OPEN_BROWSER", "true").lower() == "true":
+        threading.Thread(target=open_browser, daemon=True).start()
+    uvicorn.run(app, host=host, port=port, reload=False)

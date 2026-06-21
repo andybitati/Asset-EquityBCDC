@@ -29,8 +29,43 @@ export function fetchInventory(token) {
   return request('/inventory', token)
 }
 
+export function fetchStockItems(token) {
+  return request('/stock-items', token)
+}
+
 export function fetchCurrentUser(token) {
   return request('/me', token)
+}
+
+export function updateCurrentUser(token, payload) {
+  return request('/users/me', token, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchUsers(token) {
+  return request('/users', token)
+}
+
+export function createUser(token, payload) {
+  return request('/users', token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateUser(token, username, payload) {
+  return request(`/users/${encodeURIComponent(username)}`, token, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteUser(token, username) {
+  return request(`/users/${encodeURIComponent(username)}`, token, {
+    method: 'DELETE',
+  })
 }
 
 export function fetchForecast(token) {
@@ -39,6 +74,10 @@ export function fetchForecast(token) {
 
 export function fetchMovements(token) {
   return request('/movements', token)
+}
+
+export function fetchAuditLogs(token) {
+  return request('/audit-logs', token)
 }
 
 export function submitEntry(token, payload) {

@@ -7,7 +7,11 @@ export default function ExportPage({ token }) {
     setStatus(null)
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
-      const response = await fetch(`${apiUrl}/data/stock_log.csv`)
+      const response = await fetch(`${apiUrl}/exports/movements.csv`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (!response.ok) {
         throw new Error('Fichier introuvable')
       }
@@ -15,7 +19,7 @@ export default function ExportPage({ token }) {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = 'stock_log.csv'
+      link.download = 'movements.csv'
       link.click()
       URL.revokeObjectURL(url)
       setStatus('Export CSV téléchargé')

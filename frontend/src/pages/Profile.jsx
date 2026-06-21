@@ -1,0 +1,179 @@
+import { useEffect, useState } from 'react'
+import { createUser, deleteUser, fetchUsers, updateCurrentUser, updateUser } from '../services/api'
+
+function defaultForm(user) {
+  return {
+    username: user?.username || '',
+    display_name: user?.display_name || '',
+    photo_url: user?.photo_url || '',
+    current_password: '',
+    new_password: '',
+  }
+}
+
+export default function ProfilePage({ token, user, refresh }) {
+  const [form, setForm] = useState(defaultForm(user))
+  const [newUser, setNewUser] = useState({ username: '', display_name: '', password: '', role: 'user', photo_url: '' })
+  const [users, setUsers] = useState([])
+  const [message, setMessage] = useState(null)
+
+  useEffect(() => {
+    setForm(defaultForm(user))
+  }, [user])
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      fetchUsers(token).then(data => setUsers(data.users || [])).catch(() => setUsers([]))
+    }
+  }, [token, user])
+
+  const saveProfile = async () => {
+    setMessage(null)
+    try {
+      const payload = {
+        username: form.username,
+        display_name: form.display_name,
+        photo_url: form.photo_url,
+        current_password: form.current_password || null,
+        new_password: form.new_password || null,
+      }
+      await updateCurrentUser(token, payload)
+      setMessage('Profil mis à jour.')
+      setForm(prev => ({ ...prev, current_password: '', new_password: '' }))
+      refresh()
+    } catch (err) {
+      setMessage("Modification refusée : vérifiez la règle des 3 mois ou les informations saisies.")
+    }
+  }
+
+  const saveUser = async target => {
+    setMessage(null)
+    try {
+      await updateUser(token, target.original_username || target.username, {
+        username: target.username,
+        display_name: target.display_name,
+        role: target.role,
+        photo_url: target.photo_url,
+        is_active: target.is_active,
+      })
+      setMessage('Utilisateur mis à jour.')
+      const data = await fetchUsers(token)
+      setUsers(data.users || [])
+      refresh()
+    } catch (err) {
+      setMessage("Impossible de modifier cet utilisateur.")
+    }
+  }
+
+  const addUser = async () => {
+    setMessage(null)
+    try {
+      await createUser(token, newUser)
+      setMessage('Utilisateur créé.')
+      setNewUser({ username: '', display_name: '', password: '', role: 'user', photo_url: '' })
+      const data = await fetchUsers(token)
+      setUsers(data.users || [])
+    } catch (err) {
+      setMessage("Création refusée : vérifiez les champs et la règle du mot de passe.")
+    }
+  }
+
+  const removeUser = async username => {
+    setMessage(null)
+    try {
+      await deleteUser(token, username)
+      setMessage('Utilisateur supprimé.')
+      setUsers(users.filter(item => item.username !== username))
+    } catch (err) {
+      setMessage("Suppression impossible.")
+    }
+  }
+
+  return (
+    <div className="page profile-page">
+      <div className="page-header">
+        <h2>Profil et utilisateurs</h2>
+      </div>
+
+      <div className="panel profile-panel">
+        <div className="profile-preview">
+          <img src={form.photo_url || '/equity-bank-logo.png'} alt={form.display_name || form.username} />
+          <div>
+            <h3>{form.display_name || form.username}</h3>
+            <span>{user?.role || 'user'}</span>
+          </div>
+        </div>
+        <div className="form-panel compact-form">
+          <label>
+            Identifiant
+            <input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} />
+          </label>
+          <label>
+            Nom affiché
+            <input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })} />
+          </label>
+          <label>
+            Photo utilisateur
+            <input value={form.photo_url} onChange={e => setForm({ ...form, photo_url: e.target.value })} placeholder="URL ou chemin de la photo" />
+          </label>
+          <label>
+            Mot de passe actuel
+            <input type="password" value={form.current_password} onChange={e => setForm({ ...form, current_password: e.target.value })} />
+          </label>
+          <label>
+            Nouveau mot de passe
+            <input type="password" value={form.new_password} onChange={e => setForm({ ...form, new_password: e.target.value })} />
+          </label>
+          <p className="form-hint">Hors admin, les identifiants ne peuvent être modifiés qu’une fois tous les 3 mois. Le mot de passe doit contenir 8 caractères, une majuscule, un chiffre et un caractère spécial.</p>
+          <button type="button" onClick={saveProfile}>Enregistrer mon profil</button>
+        </div>
+      </div>
+
+      {user?.role === 'admin' && (
+        <div className="panel table-panel">
+          <div className="panel-heading">
+            <h3>Gestion des utilisateurs</h3>
+            <span>L’admin ne peut pas changer le mot de passe d’un autre utilisateur.</span>
+          </div>
+          <div className="user-create-grid">
+            <input value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} placeholder="Identifiant" />
+            <input value={newUser.display_name} onChange={e => setNewUser({ ...newUser, display_name: e.target.value })} placeholder="Nom affiché" />
+            <input type="password" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} placeholder="Mot de passe initial" />
+            <input value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} placeholder="Rôle" />
+            <input value={newUser.photo_url} onChange={e => setNewUser({ ...newUser, photo_url: e.target.value })} placeholder="Photo URL" />
+            <button type="button" onClick={addUser}>Créer utilisateur</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Photo</th>
+                <th>Identifiant</th>
+                <th>Nom</th>
+                <th>Rôle</th>
+                <th>Actif</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(item => (
+                <tr key={item.username}>
+                  <td><img className="table-avatar" src={item.photo_url || '/equity-bank-logo.png'} alt={item.display_name} /></td>
+                  <td><input value={item.username} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, original_username: row.original_username || row.username, username: e.target.value } : row))} /></td>
+                  <td><input value={item.display_name} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, display_name: e.target.value } : row))} /></td>
+                  <td><input value={item.role} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, role: e.target.value } : row))} /></td>
+                  <td><input type="checkbox" checked={item.is_active} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, is_active: e.target.checked } : row))} /></td>
+                  <td className="action-cell">
+                    <button type="button" onClick={() => saveUser(item)}>Sauver</button>
+                    <button type="button" className="danger-button" onClick={() => removeUser(item.username)}>Supprimer</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {message && <div className="info-message">{message}</div>}
+    </div>
+  )
+}

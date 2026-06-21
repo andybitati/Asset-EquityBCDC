@@ -4,20 +4,25 @@ import DashboardPage from './pages/Dashboard'
 import InventoryPage from './pages/Inventory'
 import MovementsPage from './pages/Movements'
 import ExportPage from './pages/Export'
+import ProfilePage from './pages/Profile'
+import AuditPage from './pages/Audit'
 import NavBar from './components/NavBar'
-import { fetchCurrentUser, fetchInventory, fetchForecast, fetchMovements, logoutRequest } from './services/api'
+import { fetchCurrentUser, fetchInventory, fetchStockItems, fetchForecast, fetchMovements, logoutRequest } from './services/api'
 
 const pages = {
   dashboard: DashboardPage,
   inventory: InventoryPage,
   movements: MovementsPage,
   export: ExportPage,
+  profile: ProfilePage,
+  audit: AuditPage,
 }
 
 export default function App() {
   const [token, setToken] = useState(null)
   const [page, setPage] = useState('dashboard')
   const [inventory, setInventory] = useState({})
+  const [stockItems, setStockItems] = useState([])
   const [forecast, setForecast] = useState(null)
   const [movements, setMovements] = useState([])
   const [user, setUser] = useState(null)
@@ -26,6 +31,7 @@ export default function App() {
     if (!token) return
     fetchCurrentUser(token).then(data => setUser(data.user || null))
     fetchInventory(token).then(data => setInventory(data.inventory || {}))
+    fetchStockItems(token).then(data => setStockItems(data.items || []))
     fetchForecast(token).then(setForecast)
     fetchMovements(token).then(data => setMovements(data.movements || []))
   }, [token])
@@ -39,6 +45,9 @@ export default function App() {
       const payload = JSON.parse(event.data)
       setInventory(payload.inventory)
       setForecast(payload.forecast)
+      if (payload.stock_items) {
+        setStockItems(payload.stock_items)
+      }
     }
     ws.onclose = () => console.log('WebSocket déconnecté')
     return () => ws.close()
@@ -66,11 +75,14 @@ export default function App() {
         <CurrentPage
           token={token}
           inventory={inventory}
+          stockItems={stockItems}
           forecast={forecast}
           movements={movements}
+          user={user}
           refresh={() => {
             fetchCurrentUser(token).then(data => setUser(data.user || null))
             fetchInventory(token).then(data => setInventory(data.inventory || {}))
+            fetchStockItems(token).then(data => setStockItems(data.items || []))
             fetchForecast(token).then(setForecast)
             fetchMovements(token).then(data => setMovements(data.movements || []))
           }}

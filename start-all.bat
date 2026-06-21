@@ -13,7 +13,7 @@ if exist "%ROOT_DIR%venv\Scripts\python.exe" (
 )
 
 start "Assets EquityBCDC Backend" cmd /k %PYTHON% -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-start "Assets EquityBCDC Frontend" cmd /k cd /d "%ROOT_DIR%frontend" && npm run dev
+start "Assets EquityBCDC Frontend" cmd /k "cd /d ""%ROOT_DIR%frontend"" && npm run dev"
 
 timeout /t 5 /nobreak >nul
 start "Assets EquityBCDC UI" "http://localhost:5173"

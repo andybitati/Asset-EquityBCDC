@@ -1,88 +1,778 @@
-# Assets EquityBCDC
+# Assets Equity BCDC
 
-Projet de logiciel web de gestion de stock pour équipements informatiques.
+Assets Equity BCDC est une application web de gestion de stock des matériels informatiques de la Banque Equity BCDC.
+
+Elle permet de suivre les entrées et sorties de matériels comme les écrans, laptops, desktops, souris, switchs, routeurs, claviers et autres équipements. Chaque mouvement est horodaté, lié à l’utilisateur qui l’a initié, et conserve les informations de destination, de bénéficiaire et de description.
+
+## Objectif
+
+L’application répond à trois besoins principaux :
+
+- connaître le stock réel disponible par type de matériel ;
+- suivre l’historique complet des mouvements de chaque matériel ;
+- anticiper les ruptures de stock grâce à des seuils calculés automatiquement.
 
 ## Architecture
 
-- backend: Python + FastAPI
-- frontend: React + Vite
+- Backend : Python, FastAPI, SQLAlchemy
+- Frontend : React, Vite, Recharts
+- Base de données : MySQL, avec fallback SQLite si `DATABASE_URL` n’est pas défini
+- Temps réel : WebSocket pour rafraîchir le stock et les indicateurs
 
-## Fonctionnalités
+## Modèle de données
 
-- Authentification obligatoire
-- Suivi des entrées/sorties de matériel
-- Stock en temps réel via WebSocket
-- CSV log automatique en arrière-plan
-- Export CSV à la demande
-- Dashboard de suivi et prévision de commande
+La base contient les tables principales suivantes :
 
-## Démarrage
+- `users` : utilisateurs autorisés à se connecter ;
+- `equipment_types` : référentiel des types de matériels ;
+- `materials` : référentiel des matériels enregistrés ;
+- `movements` : journal des entrées et sorties.
 
-### Installation
+### `materials`
 
-```powershell
-cd backend
-python -m venv venv
-venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-cd ..
-npm install
+La table `materials` représente le matériel lui-même :
+
+- type de matériel ;
+- numéro de série ;
+- modèle ;
+- description ;
+- dates de création et de mise à jour.
+
+Le stock courant n’est pas stocké directement dans cette table. Il est calculé à partir des mouvements afin d’éviter les désynchronisations.
+
+### `movements`
+
+La table `movements` contient le journal complet :
+
+- matériel concerné (`material_id`) ;
+- type de mouvement : entrée ou sortie ;
+- quantité ;
+- destination ;
+- personne qui a pris le matériel ;
+- utilisateur qui a initié le mouvement ;
+- description ou note ;
+- date et heure du mouvement.
+
+## Règles métier
+
+### Entrée de matériel
+
+Une entrée ajoute du matériel au stock.
+
+Pour les types suivants, le numéro de série et le modèle sont obligatoires :
+
+- `Ecran`
+- `Laptop`
+- `Desktop`
+- `Switch`
+- `Routeur`
+
+Si le matériel n’existe pas encore dans `materials`, il est créé automatiquement, puis le mouvement d’entrée est enregistré.
+
+### Sortie de matériel
+
+Une sortie ne peut pas être saisie librement. Elle doit obligatoirement concerner un matériel déjà disponible en stock.
+
+Pour chaque sortie, l’utilisateur doit renseigner :
+
+- la destination du matériel ;
+- la personne qui prend le matériel ;
+- une description ou note de sortie si nécessaire.
+
+Le système enregistre aussi automatiquement l’utilisateur connecté qui a initié le mouvement.
+
+## Calcul du stock
+
+Le stock disponible est calculé à partir du journal des mouvements.
+
+Pour un matériel ou un type de matériel donné :
+
+```text
+stock_actuel = somme(entrées) - somme(sorties)
 ```
 
-### Lancer les deux serveurs ensemble
+Exemple :
 
-Depuis la racine du projet (`F:\Asset-Equity`) :
+```text
+Entrées Desktop = 10
+Sorties Desktop = 3
+Stock Desktop = 10 - 3 = 7
+```
+
+Cette méthode garantit que le stock affiché reste cohérent avec l’historique.
+
+## Anticipation des commandes
+
+L’application calcule automatiquement une métrique de consommation pour anticiper les commandes.
+
+### Métrique retenue
+
+La métrique principale est la consommation moyenne journalière sur les 30 derniers jours.
+
+Pour chaque type de matériel :
+
+```text
+consommation_moyenne_journaliere = sorties_des_30_derniers_jours / 30
+```
+
+Exemple :
+
+```text
+Sorties Laptop sur 30 jours = 15
+Consommation moyenne journalière = 15 / 30 = 0,5 Laptop par jour
+```
+
+### Estimation du nombre de jours avant rupture
+
+Si la consommation moyenne est supérieure à zéro :
+
+```text
+jours_avant_rupture = stock_actuel / consommation_moyenne_journaliere
+```
+
+Exemple :
+
+```text
+Stock Laptop = 6
+Consommation moyenne journalière = 0,5
+Jours avant rupture = 6 / 0,5 = 12 jours
+```
+
+Si aucune sortie n’a été observée sur les 30 derniers jours, l’application affiche `N/A`, car il n’y a pas assez de consommation récente pour estimer une rupture.
+
+## Seuils automatiques
+
+L’application calcule deux seuils par type de matériel.
+
+### Seuil de commande
+
+Le seuil de commande indique à partir de quel niveau il faut envisager une nouvelle commande.
+
+```text
+seuil_commande = max(2, consommation_moyenne_journaliere * 5 + 2)
+```
+
+Interprétation :
+
+- `consommation_moyenne_journaliere * 5` couvre environ 5 jours de consommation ;
+- `+ 2` ajoute une marge minimale ;
+- `max(2, ...)` garantit qu’un seuil minimum existe même si la consommation récente est faible.
+
+Exemple :
+
+```text
+Consommation moyenne journalière = 0,5
+Seuil commande = max(2, 0,5 * 5 + 2)
+Seuil commande = max(2, 4,5)
+Seuil commande = 5
+```
+
+Si le stock actuel est inférieur ou égal à ce seuil, le dashboard affiche un risque de pénurie.
+
+### Réserve d’urgence
+
+La réserve d’urgence protège un minimum de stock qui ne doit plus être utilisé pour les sorties normales.
+
+```text
+reserve_urgence = max(1, consommation_moyenne_journaliere * 2 + 1)
+```
+
+Interprétation :
+
+- `consommation_moyenne_journaliere * 2` couvre environ 2 jours de consommation ;
+- `+ 1` garde une marge de sécurité ;
+- `max(1, ...)` garantit qu’il reste toujours au moins une unité protégée.
+
+Exemple :
+
+```text
+Consommation moyenne journalière = 0,5
+Réserve urgence = max(1, 0,5 * 2 + 1)
+Réserve urgence = max(1, 2)
+Réserve urgence = 2
+```
+
+### Blocage des sorties
+
+Les sorties d’un type de matériel sont bloquées dans deux cas.
+
+Cas 1 : le stock est déjà à la réserve d’urgence.
+
+```text
+stock_actuel <= reserve_urgence
+```
+
+Cas 2 : la sortie demandée ferait passer le stock sous la réserve d’urgence.
+
+```text
+stock_actuel - quantite_demandee < reserve_urgence
+```
+
+Exemple :
+
+```text
+Stock Laptop = 3
+Réserve urgence = 2
+Sortie demandée = 2
+
+Stock après sortie = 3 - 2 = 1
+1 < 2
+
+Sortie refusée
+```
+
+Le stock restant est ainsi conservé pour les cas d’urgence jusqu’à ce que de nouvelles entrées augmentent le stock.
+
+## Dashboard
+
+Le dashboard affiche :
+
+- le stock total ;
+- le total des entrées ;
+- le total des sorties ;
+- les types actifs en stock ;
+- l’évolution du stock par type de matériel ;
+- les risques de pénurie ;
+- le seuil de commande ;
+- la réserve d’urgence ;
+- les mouvements récents filtrables.
+
+La barre de recherche permet de retrouver un mouvement par :
+
+- type de matériel ;
+- numéro de série ;
+- modèle ;
+- destination ;
+- personne qui a pris le matériel ;
+- utilisateur qui a initié le mouvement ;
+- description.
+
+## Authentification
+
+Chaque utilisateur doit se connecter avant d’accéder à l’application.
+
+Les utilisateurs sont stockés dans la table `users`. Cette table contient notamment :
+
+- l’identifiant de connexion ;
+- le nom affiché ;
+- le hash du mot de passe ;
+- le rôle ;
+- l’URL ou le chemin de la photo utilisateur (`photo_url`) ;
+- le statut actif/inactif.
+
+Lorsqu’un mouvement est créé, le backend associe automatiquement le mouvement à l’utilisateur connecté via le champ `initiated_by`.
+
+### Règle de mot de passe
+
+Un mot de passe valide doit respecter toutes les conditions suivantes :
+
+- au moins 8 caractères ;
+- au moins une lettre majuscule ;
+- au moins un chiffre ;
+- au moins un caractère spécial.
+
+Exemple valide :
+
+```text
+StrongPassword123!
+```
+
+Exemple invalide :
+
+```text
+password
+```
+
+## Configuration MySQL
+
+Le backend utilise la variable `DATABASE_URL` définie dans `backend/.env`.
+
+Exemple :
+
+```env
+DATABASE_URL=mysql+pymysql://asset_equity_user:ChangeMe123!@127.0.0.1:3306/asset_equity
+```
+
+Le script de création de base se trouve ici :
+
+```text
+backend/mysql-init.sql
+```
+
+Il crée :
+
+- la base `asset_equity` ;
+- l’utilisateur MySQL applicatif ;
+- les tables nécessaires ;
+- les types de matériels initiaux ;
+- les utilisateurs initiaux.
+
+## Installation
+
+Depuis la racine du projet :
 
 ```powershell
-npm run dev
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+npm install
+npm --prefix frontend install
+```
+
+## Lancement
+
+Le lancement recommandé se fait avec :
+
+```powershell
+.\start-all.bat
 ```
 
 Cela démarre :
-- le backend FastAPI sur `http://localhost:8000`
-- le frontend React sur `http://localhost:5173`
 
-### Lancer séparément
+- le backend sur `http://localhost:8000` ;
+- le frontend sur `http://localhost:5173` ;
+- le navigateur vers l’interface web.
 
-Si nécessaire, tu peux aussi lancer séparément :
-
-Backend :
-```powershell
-cd backend
-venv\Scripts\Activate.ps1
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Frontend :
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-### Lancer d’un seul clic
-
-J’ai ajouté un script racine `start-all.bat` dans `F:\Asset-Equity`.
-
-Pour lancer le backend et le frontend ensemble :
+Un raccourci Bureau peut être créé avec :
 
 ```powershell
-cd F:\Asset-Equity
-start-all.bat
+powershell -ExecutionPolicy Bypass -File scripts\CreateDesktopShortcut.ps1
 ```
 
-### Créer un raccourci bureau
+## Connexion MySQL en production
 
-1. Ouvre l’Explorateur Windows.
-2. Va dans `F:\Asset-Equity`.
-3. Clique droit sur `start-all.bat` puis `Envoyer vers > Bureau (créer un raccourci)`.
-4. Double-clique sur le raccourci bureau pour démarrer les deux serveurs.
+La procédure complète de connexion à une base MySQL de production est documentée ici :
+
+```text
+docs/PRODUCTION_DB_SETUP.md
+```
+
+Résumé :
+
+- ouvrir MySQL Workbench sur la machine cible ou le serveur DB ;
+- exécuter `backend/mysql-init.sql` ;
+- créer ou vérifier `backend/.env` ;
+- renseigner `DATABASE_URL` ;
+- lancer le backend pour vérifier la connexion ;
+- démarrer l’application.
+
+## Installateur Windows `.exe`
+
+Un vrai installateur Windows peut être généré avec Inno Setup à partir de :
+
+```text
+installer/AssetsEquityBCDC.iss
+```
+
+Cet installateur :
+
+- copie l’application dans `C:\Program Files\Assets Equity BCDC` ;
+- crée les raccourcis ;
+- lance `scripts/InstallDependencies.ps1` ;
+- prépare le venv Python ;
+- installe les dépendances backend et frontend.
+
+Pré-requis sur la machine installée :
+
+- Python 3.11+ ;
+- Node.js LTS ;
+- accès à MySQL ;
+- accès réseau interne si la base est distante.
+
+Pour construire le setup :
 
 ```powershell
-cd frontend
-npm install
-npm run dev
+iscc installer\AssetsEquityBCDC.iss
 ```
 
-## Notes
+Le résultat attendu est :
 
-Le backend expose une API avec WebSocket pour les mises à jour en temps réel. Le frontend React consomme ces données et affiche des graphiques.
+```text
+installer\AssetsEquityBCDC-Setup.exe
+```
+
+La documentation détaillée de l’installateur est disponible ici :
+
+```text
+docs/WINDOWS_INSTALLER.md
+```
+
+## Développement
+
+Backend seul :
+
+```powershell
+.\venv\Scripts\python.exe -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Frontend seul :
+
+```powershell
+npm --prefix frontend run dev
+```
+
+Build frontend :
+
+```powershell
+npm --prefix frontend run build
+```
+
+## Politiques de sécurité bancaires
+
+Assets Equity BCDC traite des données internes de stock informatique d’une banque. Même si ces données ne sont pas directement des données financières client, elles restent sensibles parce qu’elles décrivent les équipements, les mouvements internes, les utilisateurs, les destinations et les responsabilités opérationnelles.
+
+Cette section décrit les politiques de sécurité attendues pour une mise en production dans un environnement bancaire.
+
+### Classification des données
+
+Les données de l’application doivent être considérées comme confidentielles internes.
+
+Sont notamment sensibles :
+
+- les comptes utilisateurs ;
+- les photos et profils utilisateurs ;
+- les mouvements de matériels ;
+- les numéros de série ;
+- les destinations internes ;
+- les personnes ayant pris un matériel ;
+- les utilisateurs ayant initié les opérations ;
+- les statistiques de stock et de pénurie.
+
+Ces informations ne doivent pas être exposées publiquement, copiées dans des fichiers non sécurisés ou partagées hors des canaux internes autorisés.
+
+### Authentification
+
+Chaque utilisateur doit disposer d’un compte nominatif. Les comptes partagés sont interdits.
+
+Politique minimale :
+
+- connexion obligatoire avant toute consultation ;
+- mot de passe d’au moins 8 caractères ;
+- au moins une majuscule ;
+- au moins un chiffre ;
+- au moins un caractère spécial ;
+- blocage ou surveillance des tentatives de connexion répétées ;
+- désactivation immédiate des comptes des utilisateurs sortants ;
+- interdiction d’utiliser des mots de passe par défaut en production.
+
+Politique recommandée pour production bancaire :
+
+- hachage des mots de passe avec Argon2id ou bcrypt ;
+- rotation périodique selon la politique interne de la banque ;
+- authentification multifacteur pour les administrateurs ;
+- expiration automatique des sessions ;
+- révocation serveur des sessions compromises.
+
+### Gestion des identifiants
+
+Les utilisateurs peuvent modifier leurs identifiants et leur photo depuis l’interface, mais pas librement à tout moment.
+
+Règle métier appliquée :
+
+```text
+Un utilisateur standard ne peut modifier ses identifiants qu’une fois tous les 3 mois.
+```
+
+Exception :
+
+```text
+L’administrateur peut modifier les identifiants à tout moment.
+```
+
+Restriction importante :
+
+```text
+L’administrateur ne peut jamais modifier le mot de passe d’un autre utilisateur.
+```
+
+L’administrateur peut :
+
+- modifier l’identifiant ;
+- modifier le nom affiché ;
+- modifier le rôle ;
+- modifier la photo ;
+- activer ou désactiver un compte ;
+- supprimer un compte.
+
+Il ne peut pas :
+
+- connaître le mot de passe d’un utilisateur ;
+- remplacer directement le mot de passe d’un utilisateur.
+
+Si un utilisateur perd son mot de passe, la procédure recommandée est une réinitialisation contrôlée via un processus séparé, journalisé et validé par l’équipe habilitée.
+
+### Autorisations et séparation des rôles
+
+Le principe du moindre privilège doit être appliqué.
+
+Rôles recommandés :
+
+- `admin` : gestion des utilisateurs, supervision, configuration ;
+- `user` : saisie des entrées/sorties et consultation opérationnelle ;
+- `auditor` : consultation seule des mouvements et rapports ;
+- `manager` : consultation des alertes, validations et rapports.
+
+Une action sensible doit être réservée aux rôles nécessaires uniquement.
+
+Actions sensibles :
+
+- suppression d’un utilisateur ;
+- désactivation d’un compte ;
+- modification des identifiants ;
+- export des données ;
+- suppression ou correction de mouvements ;
+- modification des paramètres de seuils ;
+- accès aux rapports globaux.
+
+### Traçabilité et audit
+
+Chaque mouvement doit permettre de répondre aux questions suivantes :
+
+- quel matériel est concerné ?
+- quel type de mouvement a été effectué ?
+- quelle quantité a été déplacée ?
+- quand le mouvement a-t-il eu lieu ?
+- où va le matériel ?
+- qui l’a pris ?
+- quel utilisateur a initié l’opération ?
+
+Le champ `initiated_by` permet d’identifier l’utilisateur connecté qui a enregistré l’opération.
+
+Pour une production bancaire, il faut aller plus loin avec une table d’audit dédiée.
+
+Exemple de table recommandée :
+
+```text
+audit_logs
+- id
+- actor_username
+- action
+- entity_type
+- entity_id
+- old_value
+- new_value
+- ip_address
+- user_agent
+- created_at
+```
+
+Les logs d’audit doivent être :
+
+- non modifiables par les utilisateurs applicatifs ;
+- conservés selon la durée réglementaire interne ;
+- consultables uniquement par les profils autorisés ;
+- exportables pour contrôle interne ou audit de sécurité.
+
+### Confidentialité et chiffrement
+
+Toutes les communications doivent être chiffrées en production.
+
+Obligatoire :
+
+- HTTPS/TLS entre navigateur et backend ;
+- TLS entre backend et base MySQL si la base est distante ;
+- cookies ou tokens protégés ;
+- interdiction de transmettre des secrets dans l’URL ;
+- désactivation des logs contenant mots de passe, tokens ou secrets.
+
+Recommandé :
+
+- chiffrement au repos du serveur MySQL ;
+- chiffrement des sauvegardes ;
+- gestion des clés via un coffre de secrets ;
+- rotation des secrets applicatifs.
+
+### Gestion des secrets
+
+Les secrets ne doivent jamais être commités dans Git.
+
+Sont considérés comme secrets :
+
+- mots de passe MySQL ;
+- clés applicatives ;
+- tokens ;
+- identifiants administrateurs ;
+- chaînes de connexion ;
+- certificats privés.
+
+La configuration doit passer par :
+
+- `.env` local non versionné ;
+- variables d’environnement serveur ;
+- coffre de secrets en production.
+
+Le fichier `.env` ne doit jamais être transmis par messagerie non sécurisée.
+
+### Sécurité base de données
+
+Le compte MySQL utilisé par l’application doit avoir uniquement les privilèges nécessaires.
+
+Politique minimale :
+
+- compte applicatif séparé du compte `root` ;
+- mot de passe fort ;
+- accès limité à la base `asset_equity` ;
+- interdiction d’utiliser `root` depuis l’application ;
+- sauvegardes régulières ;
+- restauration testée périodiquement.
+
+Recommandé :
+
+- chiffrement des sauvegardes ;
+- compte lecture seule pour reporting/audit ;
+- journalisation des accès administrateurs ;
+- segmentation réseau entre application et base ;
+- restrictions par adresse IP ou réseau interne.
+
+### Sécurité réseau
+
+L’application doit fonctionner uniquement sur le réseau autorisé de la banque.
+
+En production :
+
+- ne pas exposer le backend directement sur Internet ;
+- placer l’application derrière un reverse proxy sécurisé ;
+- limiter les ports ouverts ;
+- utiliser un pare-feu ;
+- journaliser les accès ;
+- séparer les environnements développement, test et production.
+
+### Protection contre les erreurs de manipulation
+
+Certaines opérations doivent être protégées par des confirmations ou restrictions.
+
+Exemples :
+
+- suppression utilisateur ;
+- désactivation utilisateur ;
+- export de données ;
+- modification des identifiants ;
+- mouvements de sortie importants ;
+- sorties proches de la réserve d’urgence.
+
+Les sorties sont déjà contrôlées par la réserve d’urgence.
+
+Rappel :
+
+```text
+Si stock_actuel <= reserve_urgence, les sorties normales sont bloquées.
+```
+
+Et :
+
+```text
+Si stock_actuel - quantite_demandee < reserve_urgence, la sortie est refusée.
+```
+
+### Sauvegarde et restauration
+
+Une politique de sauvegarde est obligatoire.
+
+Minimum recommandé :
+
+- sauvegarde quotidienne de MySQL ;
+- sauvegarde avant toute migration ;
+- conservation sur plusieurs jours ;
+- stockage sécurisé ;
+- restauration testée régulièrement.
+
+Les sauvegardes doivent inclure :
+
+- tables applicatives ;
+- utilisateurs ;
+- mouvements ;
+- matériels ;
+- logs d’audit si présents.
+
+Les sauvegardes ne doivent pas être laissées en clair dans le dossier projet.
+
+### Journalisation applicative
+
+Les logs doivent aider au diagnostic sans exposer de secrets.
+
+À journaliser :
+
+- erreurs backend ;
+- tentatives de connexion échouées ;
+- opérations administrateur ;
+- erreurs de base de données ;
+- refus de sorties pour réserve d’urgence.
+
+À ne jamais journaliser :
+
+- mots de passe ;
+- hashes de mots de passe ;
+- tokens de session ;
+- chaînes de connexion complètes ;
+- secrets applicatifs.
+
+L’application prévoit deux fichiers de logs locaux :
+
+```text
+backend/logs/app.log
+backend/logs/security.log
+```
+
+`app.log` sert aux événements applicatifs généraux.
+
+`security.log` sert aux événements sensibles :
+
+- connexions réussies ;
+- connexions échouées ;
+- déconnexions ;
+- exports ;
+- modifications utilisateurs ;
+- suppressions utilisateurs ;
+- entrées/sorties de stock.
+
+Les logs utilisent une rotation automatique. Les paramètres configurables sont :
+
+```env
+LOG_DIR=backend/logs
+LOG_LEVEL=INFO
+LOG_MAX_BYTES=5242880
+LOG_BACKUP_COUNT=5
+```
+
+Le dossier `backend/logs/` est ignoré par Git.
+
+### Environnements
+
+Les environnements doivent être séparés.
+
+```text
+développement != test != production
+```
+
+Chaque environnement doit avoir :
+
+- sa propre base ;
+- ses propres utilisateurs ;
+- ses propres secrets ;
+- ses propres règles de sauvegarde ;
+- ses propres accès réseau.
+
+Les données de production ne doivent pas être copiées en développement sans anonymisation ou autorisation formelle.
+
+### Durcissement avant production
+
+Le code intègre déjà plusieurs mesures applicatives :
+
+- hachage PBKDF2-SHA256 avec sel ;
+- migration automatique des anciens hashes SHA-256 au prochain login ;
+- expiration des sessions ;
+- limitation des tentatives de connexion ;
+- table `audit_logs` ;
+- rôles `admin`, `user`, `manager`, `auditor` ;
+- export CSV protégé par authentification et rôle ;
+- journalisation des entrées, sorties, exports et changements utilisateurs ;
+- script de sauvegarde MySQL : `scripts/BackupMySql.ps1`.
+
+Avant une mise en production bancaire complète, les points suivants restent à traiter dans l’infrastructure ou par procédure :
+
+- ajouter authentification multifacteur pour les administrateurs ;
+- imposer HTTPS ;
+- sécuriser les sauvegardes ;
+- documenter une procédure de restauration ;
+- documenter une procédure de révocation d’accès ;
+- faire une revue de code sécurité ;
+- faire un test d’intrusion interne ou externe selon la politique de la banque.

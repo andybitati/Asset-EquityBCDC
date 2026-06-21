@@ -21,6 +21,7 @@ export default function LoginPage({ onLogin }) {
   return (
     <div className="auth-page">
       <div className="auth-card">
+        <img className="auth-logo" src="/equity-bank-logo.png" alt="Equity Logo" />
         <h1>Assets EquityBCDC</h1>
         <p>Connexion requise pour accéder à la gestion du stock.</p>
         <form onSubmit={handleSubmit}>
@@ -41,8 +42,10 @@ export default function LoginPage({ onLogin }) {
                 type="button"
                 className="password-toggle"
                 onClick={() => setShowPassword(prev => !prev)}
+                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                title={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
               >
-                {showPassword ? 'Masquer' : 'Voir'}
+                <img src="/oeil.jpg" alt="" />
               </button>
             </div>
           </label>

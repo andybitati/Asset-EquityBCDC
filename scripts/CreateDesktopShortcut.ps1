@@ -1,6 +1,7 @@
 $WScriptShell = New-Object -ComObject WScript.Shell
-$ShortcutPath = "$env:USERPROFILE\Desktop\Start-Assets-EquityBCDC.lnk"
-$TargetPath = "F:\Asset-Equity\Start-Assets-EquityBCDC.bat"
+$DesktopPath = [Environment]::GetFolderPath('Desktop')
+$ShortcutPath = Join-Path $DesktopPath "Start-Assets-EquityBCDC.lnk"
+$TargetPath = "F:\Asset-Equity\start-all.bat"
 $WorkingDirectory = "F:\Asset-Equity"
 $IconLocation = "F:\Asset-Equity\frontend\public\favicon.ico"
 $shortcut = $WScriptShell.CreateShortcut($ShortcutPath)

@@ -14,6 +14,9 @@ export default function MovementsPage({ movements }) {
               <th>Quantité</th>
               <th>Série / Modèle</th>
               <th>Destination</th>
+              <th>Pris par</th>
+              <th>Initié par</th>
+              <th>Description</th>
               <th>Date</th>
             </tr>
           </thead>
@@ -26,6 +29,9 @@ export default function MovementsPage({ movements }) {
                 <td>{record.quantity}</td>
                 <td>{record.serial_number || '-'} / {record.model || '-'}</td>
                 <td>{record.destination || '-'}</td>
+                <td>{record.taken_by || '-'}</td>
+                <td>{record.initiated_by || '-'}</td>
+                <td>{record.notes || '-'}</td>
                 <td>{new Date(record.timestamp).toLocaleString()}</td>
               </tr>
             ))}
