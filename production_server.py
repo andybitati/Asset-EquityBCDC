@@ -1,4 +1,5 @@
 import os
+import subprocess
 import threading
 import time
 import webbrowser
@@ -37,10 +38,25 @@ def public_scheme() -> str:
     return "https" if https_config() else "http"
 
 
+def open_preferred_browser(url: str) -> None:
+    if os.name == "nt":
+        candidates = [
+            os.path.join(os.getenv("ProgramFiles", ""), "Microsoft", "Edge", "Application", "msedge.exe"),
+            os.path.join(os.getenv("ProgramFiles(x86)", ""), "Microsoft", "Edge", "Application", "msedge.exe"),
+            os.path.join(os.getenv("ProgramFiles", ""), "Google", "Chrome", "Application", "chrome.exe"),
+            os.path.join(os.getenv("ProgramFiles(x86)", ""), "Google", "Chrome", "Application", "chrome.exe"),
+        ]
+        for browser_path in candidates:
+            if browser_path and os.path.isfile(browser_path):
+                subprocess.Popen([browser_path, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+    webbrowser.open(url)
+
+
 def open_browser():
     time.sleep(2)
     port = int(os.getenv("ASSET_EQUITY_PORT", "48620"))
-    webbrowser.open(f"{public_scheme()}://127.0.0.1:{port}")
+    open_preferred_browser(f"{public_scheme()}://127.0.0.1:{port}")
 
 
 if __name__ == "__main__":

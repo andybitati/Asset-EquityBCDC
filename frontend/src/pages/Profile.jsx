@@ -10,6 +10,13 @@ const avatarOptions = [
   '/avatar-auditor.svg',
 ]
 
+const roleOptions = [
+  { value: 'user', label: 'Utilisateur' },
+  { value: 'manager', label: 'Responsable' },
+  { value: 'auditor', label: 'Auditeur' },
+  { value: 'admin', label: 'Administrateur' },
+]
+
 function defaultForm(user) {
   return {
     username: user?.username || '',
@@ -197,7 +204,11 @@ export default function ProfilePage({ token, user, refresh }) {
             <input value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} placeholder="Identifiant" />
             <input value={newUser.display_name} onChange={e => setNewUser({ ...newUser, display_name: e.target.value })} placeholder="Nom affiché" />
             <input type="password" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} placeholder="Mot de passe initial" />
-            <input value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} placeholder="Rôle" />
+            <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} aria-label="Rôle du nouvel utilisateur">
+              {roleOptions.map(role => (
+                <option key={role.value} value={role.value}>{role.label}</option>
+              ))}
+            </select>
             <input value={newUser.photo_url} onChange={e => setNewUser({ ...newUser, photo_url: e.target.value })} placeholder="Photo URL" />
             <button type="button" onClick={addUser}>Créer utilisateur</button>
           </div>
@@ -263,7 +274,13 @@ export default function ProfilePage({ token, user, refresh }) {
                   </td>
                   <td><input value={item.username} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, original_username: row.original_username || row.username, username: e.target.value } : row))} /></td>
                   <td><input value={item.display_name} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, display_name: e.target.value } : row))} /></td>
-                  <td><input value={item.role} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, role: e.target.value } : row))} /></td>
+                  <td>
+                    <select value={item.role} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, role: e.target.value } : row))}>
+                      {roleOptions.map(role => (
+                        <option key={role.value} value={role.value}>{role.label}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td><input type="checkbox" checked={item.is_active} onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, is_active: e.target.checked } : row))} /></td>
                   <td className="action-cell">
                     <button type="button" onClick={() => saveUser(item)}>Sauver</button>

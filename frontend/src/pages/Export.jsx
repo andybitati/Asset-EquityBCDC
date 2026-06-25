@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { API_BASE_URL } from '../services/api'
 import { normalizeBusinessText } from '../utils/text'
 
 const csvColumns = [
@@ -31,9 +32,7 @@ export default function ExportPage({ token, movements = [] }) {
   const downloadCsv = async () => {
     setStatus(null)
     try {
-      const isViteDevServer = ['48621', '5173'].includes(window.location.port)
-      const apiUrl = import.meta.env.VITE_API_URL || (isViteDevServer ? 'http://127.0.0.1:48620' : window.location.origin)
-      const response = await fetch(`${apiUrl}/exports/movements.csv`, {
+      const response = await fetch(`${API_BASE_URL}/exports/movements.csv`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

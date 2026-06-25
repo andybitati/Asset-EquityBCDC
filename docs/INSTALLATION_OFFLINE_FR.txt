@@ -133,6 +133,13 @@ L'application ne démarre pas :
 - lancez l'application depuis un dossier utilisateur autorisé ;
 - essayez de définir STORAGE_DIR vers un dossier explicitement accessible.
 
+Page blanche dans le navigateur :
+- ouvrez manuellement http://127.0.0.1:48620/health ;
+- si /health répond {"status":"ok"}, le serveur fonctionne et le problème vient probablement du navigateur ;
+- utilisez Microsoft Edge ou Google Chrome ;
+- évitez Internet Explorer et les anciens navigateurs, qui ne supportent pas les scripts modernes utilisés par l'application ;
+- vérifiez que le dossier _internal est présent à côté de AssetsEquityBCDC.exe.
+
 Le port est déjà utilisé :
 - créez un fichier .env à côté de l'exécutable ;
 - ajoutez par exemple : ASSET_EQUITY_PORT=48630 ;

@@ -1,5 +1,8 @@
 const isViteDevServer = ['48621', '5173'].includes(window.location.port)
-const BASE_URL = import.meta.env.VITE_API_URL || (isViteDevServer ? 'http://127.0.0.1:48620' : window.location.origin)
+const defaultBackendHost = '127.0.0.1:48620'
+const defaultBackendProtocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
+export const API_BASE_URL = import.meta.env.VITE_API_URL || (isViteDevServer ? `${defaultBackendProtocol}//${defaultBackendHost}` : window.location.origin)
+const BASE_URL = API_BASE_URL
 
 function formatApiErrorDetail(detail) {
   if (!detail) return null

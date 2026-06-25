@@ -133,6 +133,13 @@ The application does not start:
 - run the application from an allowed user folder;
 - try defining STORAGE_DIR to an explicitly writable folder.
 
+Blank page in the browser:
+- manually open http://127.0.0.1:48620/health;
+- if /health returns {"status":"ok"}, the server is running and the issue is probably the browser;
+- use Microsoft Edge or Google Chrome;
+- avoid Internet Explorer and old browsers, which do not support the modern scripts used by the application;
+- check that the _internal folder is present next to AssetsEquityBCDC.exe.
+
 The port is already in use:
 - create a .env file next to the executable;
 - add for example: ASSET_EQUITY_PORT=48630;

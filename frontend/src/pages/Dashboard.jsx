@@ -8,13 +8,28 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString()
 }
 
+function cleanLabel(value) {
+  return String(normalizeBusinessText(value) || '').trim()
+}
+
+function equipmentLabel(record) {
+  const type = cleanLabel(record.equipment_type)
+  if (type && type !== 'Other') return type
+  return (
+    cleanLabel(record.model)
+    || cleanLabel(record.notes)
+    || cleanLabel(record.serial_number)
+    || 'Equipement non classe'
+  )
+}
+
 function buildHistory(movements) {
   const sorted = [...movements].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
   const totals = {}
   const byDate = new Map()
 
   sorted.forEach(record => {
-    const type = record.equipment_type
+    const type = equipmentLabel(record)
     totals[type] = totals[type] || 0
     totals[type] += record.movement_type === 'Entrée' ? record.quantity : -record.quantity
     byDate.set(formatDate(record.timestamp), { ...(byDate.get(formatDate(record.timestamp)) || {}), ...totals })
@@ -57,9 +72,10 @@ export default function DashboardPage({ inventory, stockItems = [], serialRegist
   const normalizedQuery = searchTerm.trim().toLowerCase()
   const filteredStockItems = stockItems.filter(item => matchesSearch(item, normalizedQuery))
   const filteredMovementsForStats = movements.filter(record => matchesSearch(record, normalizedQuery))
-  const displayInventory = normalizedQuery
+  const displayInventory = normalizedQuery || stockItems.length
     ? filteredStockItems.reduce((totals, item) => {
-        totals[item.equipment_type] = (totals[item.equipment_type] || 0) + item.quantity
+        const label = equipmentLabel(item)
+        totals[label] = (totals[label] || 0) + item.quantity
         return totals
       }, {})
     : inventory
@@ -71,7 +87,7 @@ export default function DashboardPage({ inventory, stockItems = [], serialRegist
   const history = useMemo(() => buildHistory(filteredMovementsForStats), [filteredMovementsForStats])
   const knownTypes = new Set([
     ...Object.entries(displayInventory).filter(([, value]) => value !== 0).map(([type]) => type),
-    ...filteredMovementsForStats.map(record => record.equipment_type),
+    ...filteredMovementsForStats.map(record => equipmentLabel(record)),
   ])
   const topChartTypes = [...chartData]
     .filter(item => item.value > 0)
@@ -79,7 +95,7 @@ export default function DashboardPage({ inventory, stockItems = [], serialRegist
     .slice(0, 8)
   const trackedSerials = serialRegistry.counts || {}
   const risks = [...(forecast?.risks || [])]
-    .filter(item => !normalizedQuery || item.equipment_type.toLowerCase().includes(normalizedQuery))
+    .filter(item => !normalizedQuery || equipmentLabel(item).toLowerCase().includes(normalizedQuery))
     .filter(item => knownTypes.has(item.equipment_type))
     .map(item => ({ ...item, level: riskLevel(item) }))
     .filter(item => item.level !== 'ok')
@@ -216,7 +232,7 @@ export default function DashboardPage({ inventory, stockItems = [], serialRegist
             {filteredMovements.length ? filteredMovements.map(record => (
               <div key={record.id} className="movement-item">
                 <div>
-                  <strong>{record.equipment_type}</strong>
+                  <strong>{equipmentLabel(record)}</strong>
                   <span>{record.serial_number || '-'} / {record.model || '-'}</span>
                   <span>{normalizeBusinessText(record.destination) || '-'} {record.taken_by ? `- ${record.taken_by}` : ''}</span>
                   <span>Initié par: {record.initiated_by || '-'}</span>
@@ -252,7 +268,7 @@ export default function DashboardPage({ inventory, stockItems = [], serialRegist
           <tbody>
             {filteredStockItems.map(item => (
               <tr key={item.material_id}>
-                <td>{item.equipment_type}</td>
+                <td>{equipmentLabel(item)}</td>
                 <td>{normalizeBusinessText(item.serial_number) || '-'}</td>
                 <td>{normalizeBusinessText(item.model) || '-'}</td>
                 <td>{item.quantity}</td>

@@ -7,7 +7,23 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="font-family: Arial, sans-serif; max-width: 720px; margin: 64px auto; padding: 24px; line-height: 1.5; color: #101827;">
+        <h1 style="margin: 0 0 12px; color: #b60f1e;">Assets Equity BCDC</h1>
+        <p style="font-size: 18px;">Chargement de l'application...</p>
+        <p>
+          Si cette page reste affichée, ouvrez l'application avec Microsoft Edge, Google Chrome
+          ou un navigateur moderne. Les anciens navigateurs comme Internet Explorer ne sont pas compatibles.
+        </p>
+        <p>
+          En cas de problème, vérifiez aussi que le dossier <strong>_internal</strong> est présent
+          à côté de <strong>AssetsEquityBCDC.exe</strong>.
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/index.jsx"></script>
+    <script nomodule>
+      document.body.innerHTML = '<div style="font-family: Arial, sans-serif; max-width: 720px; margin: 64px auto; padding: 24px; line-height: 1.5; color: #101827;"><h1 style="margin: 0 0 12px; color: #b60f1e;">Navigateur incompatible</h1><p>Cette application requiert Microsoft Edge, Google Chrome ou un navigateur moderne compatible JavaScript ES Modules.</p><p>Internet Explorer et les anciens navigateurs affichent une page blanche.</p></div>';
+    </script>
   </body>
 </html>

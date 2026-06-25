@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from typing import Literal, Optional
 
 class EquipmentType(str, Enum):
     adapter = "Adaptateur"
@@ -110,7 +110,7 @@ class UserProfileUpdate(BaseModel):
 class AdminUserUpdate(BaseModel):
     username: Optional[str] = None
     display_name: Optional[str] = None
-    role: Optional[str] = None
+    role: Optional[Literal["admin", "user", "manager", "auditor"]] = None
     photo_url: Optional[str] = None
     is_active: Optional[bool] = None
 
@@ -118,7 +118,7 @@ class AdminUserCreate(BaseModel):
     username: str
     display_name: str
     password: str
-    role: str = "user"
+    role: Literal["admin", "user", "manager", "auditor"] = "user"
     photo_url: Optional[str] = None
 
 class PhotoUpload(BaseModel):

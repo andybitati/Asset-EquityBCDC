@@ -754,6 +754,16 @@ def get_forecast(current_user: str = Depends(get_current_user)):
     return build_forecast().dict()
 
 
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "frontend_mounted": os.path.isdir(frontend_dist) if "frontend_dist" in globals() else False,
+        "storage_dir": STORAGE_DIR,
+        "time": datetime.utcnow().isoformat(),
+    }
+
+
 @app.get("/stock-policies")
 def get_stock_policies(current_user: str = Depends(get_current_user)):
     require_roles(current_user, {"admin", "user", "manager", "auditor"})
