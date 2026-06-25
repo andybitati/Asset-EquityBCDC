@@ -11,6 +11,7 @@ export default function MovementsPage({ movements }) {
           <thead>
             <tr>
               <th>ID</th>
+              <th>ID série entrée</th>
               <th>Type</th>
               <th>Équipement</th>
               <th>Quantité</th>
@@ -26,6 +27,7 @@ export default function MovementsPage({ movements }) {
             {movements.map(record => (
               <tr key={record.id}>
                 <td>{record.id}</td>
+                <td>{record.entry_serial_number_id || '-'}</td>
                 <td>{record.movement_type}</td>
                 <td>{record.equipment_type}</td>
                 <td>{record.quantity}</td>

@@ -1,0 +1,122 @@
+ASSETS EQUITY BCDC - OFFLINE INSTALLATION
+=========================================
+
+Guide version: 2026-06-25
+
+1. Package contents
+-------------------
+The offline package must contain at least:
+
+- AssetsEquityBCDC.exe
+- the _internal folder
+- INSTALLATION_OFFLINE_FR.txt
+- INSTALLATION_OFFLINE_EN.txt
+
+Important: do not copy only the .exe file. This application is delivered as a complete folder: the executable depends on the files embedded in _internal.
+
+2. Requirements
+---------------
+The target Windows workstation does not need Internet access, Node.js, Python, npm, or a virtual environment.
+
+Expected requirements:
+
+- Windows 10 or Windows 11 64-bit;
+- read/execute permission on the application folder;
+- local port 48620 available by default;
+- a modern web browser.
+
+3. Local installation
+---------------------
+1. Extract AssetsEquityBCDC-package.zip.
+2. Move the AssetsEquityBCDC folder to an allowed location, for example:
+   - C:\Users\<user>\Documents\AssetsEquityBCDC
+   - D:\Applications\AssetsEquityBCDC
+3. Open the AssetsEquityBCDC folder.
+4. Run AssetsEquityBCDC.exe.
+5. The browser opens automatically at:
+   http://127.0.0.1:48620
+
+If the browser does not open, enter the address above manually.
+
+4. Local data
+-------------
+Without MySQL configuration, the application uses a local SQLite database.
+
+Application data is stored in a Windows user folder accessible to the application, usually:
+
+%LOCALAPPDATA%\Assets Equity BCDC
+
+or, if this path is unavailable:
+
+%PROGRAMDATA%\Assets Equity BCDC
+
+or a folder explicitly defined through the STORAGE_DIR environment variable.
+
+5. Optional .env configuration
+------------------------------
+A .env file can be placed next to AssetsEquityBCDC.exe to customize runtime behavior.
+
+Example:
+
+ASSET_EQUITY_PORT=48620
+ASSET_EQUITY_HOST=127.0.0.1
+ASSET_EQUITY_OPEN_BROWSER=true
+STORAGE_DIR=D:\AssetsEquityBCDC\data
+
+To use MySQL instead of SQLite:
+
+DATABASE_URL=mysql+pymysql://user:password@127.0.0.1:3306/asset_equity
+
+The MySQL initialization script is included in the package at:
+
+_internal\backend\mysql-init.sql
+
+6. Initial accounts
+-------------------
+If no specific configuration is provided, the application uses its built-in initial accounts.
+
+After the first login, create or update user accounts from the administration interface. Do not keep a demonstration password in production.
+
+7. Important business rules
+---------------------------
+- Serialized equipment can only exit stock with a serial number registered at entry.
+- The exit movement of serialized equipment is linked to the serial number registry identifier.
+- Non-serialized consumables exit by quantity and do not pollute the serial registry.
+- Low thresholds do not automatically block exits; they trigger manager review and audit traceability.
+- Threshold parameters are visible and editable in the "Politiques stock" screen.
+
+8. Post-installation check
+--------------------------
+After startup:
+
+1. Check that the login page is displayed.
+2. Log in.
+3. Open the dashboard.
+4. Check that Stock, Serial registry, Movements, CSV export, Audit, and Stock policies menus appear according to the user role.
+5. Run a simple entry and exit test on a non-critical item.
+
+9. Troubleshooting
+------------------
+The application does not start:
+- check that the _internal folder is present;
+- check that antivirus software did not quarantine the executable;
+- run the application from an allowed user folder;
+- try defining STORAGE_DIR to an explicitly writable folder.
+
+The port is already in use:
+- create a .env file next to the executable;
+- add for example: ASSET_EQUITY_PORT=48630;
+- restart the application.
+
+The SQLite database cannot be created:
+- create a data folder, for example D:\AssetsEquityBCDC\data;
+- add STORAGE_DIR=D:\AssetsEquityBCDC\data to the .env file;
+- restart the application.
+
+10. Recommended delivery
+------------------------
+Always distribute the complete archive:
+
+AssetsEquityBCDC-package.zip
+
+Do not distribute only AssetsEquityBCDC.exe.

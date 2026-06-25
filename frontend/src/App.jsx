@@ -6,13 +6,17 @@ import MovementsPage from './pages/Movements'
 import ExportPage from './pages/Export'
 import ProfilePage from './pages/Profile'
 import AuditPage from './pages/Audit'
+import SerialRegistryPage from './pages/SerialRegistry'
+import StockPoliciesPage from './pages/StockPolicies'
 import NavBar from './components/NavBar'
-import { fetchCurrentUser, fetchInventory, fetchStockItems, fetchForecast, fetchMovements, logoutRequest } from './services/api'
+import { fetchCurrentUser, fetchInventory, fetchStockItems, fetchSerialRegistry, fetchForecast, fetchStockPolicies, fetchMovements, logoutRequest } from './services/api'
 
 const pages = {
   dashboard: DashboardPage,
   inventory: InventoryPage,
   movements: MovementsPage,
+  serials: SerialRegistryPage,
+  policies: StockPoliciesPage,
   export: ExportPage,
   profile: ProfilePage,
   audit: AuditPage,
@@ -23,7 +27,9 @@ export default function App() {
   const [page, setPage] = useState('dashboard')
   const [inventory, setInventory] = useState({})
   const [stockItems, setStockItems] = useState([])
+  const [serialRegistry, setSerialRegistry] = useState({ items: [], counts: {} })
   const [forecast, setForecast] = useState(null)
+  const [stockPolicies, setStockPolicies] = useState([])
   const [movements, setMovements] = useState([])
   const [user, setUser] = useState(null)
   const [searchInput, setSearchInput] = useState('')
@@ -34,7 +40,9 @@ export default function App() {
     fetchCurrentUser(token).then(data => setUser(data.user || null))
     fetchInventory(token).then(data => setInventory(data.inventory || {}))
     fetchStockItems(token).then(data => setStockItems(data.items || []))
+    fetchSerialRegistry(token).then(data => setSerialRegistry(data || { items: [], counts: {} }))
     fetchForecast(token).then(setForecast)
+    fetchStockPolicies(token).then(data => setStockPolicies(data.policies || []))
     fetchMovements(token).then(data => setMovements(data.movements || []))
   }, [token])
 
@@ -53,7 +61,6 @@ export default function App() {
     const wsHost = ['48621', '5173'].includes(window.location.port) ? '127.0.0.1:48620' : window.location.host
     const wsUrl = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${wsHost}/ws/updates`
     const ws = new WebSocket(wsUrl)
-    ws.onopen = () => console.log('WebSocket connecté')
     ws.onmessage = event => {
       const payload = JSON.parse(event.data)
       if (payload.inventory) {
@@ -65,11 +72,13 @@ export default function App() {
       if (payload.stock_items) {
         setStockItems(payload.stock_items)
       }
+      if (payload.serial_registry) {
+        setSerialRegistry(payload.serial_registry)
+      }
       if (payload.movements) {
         setMovements(payload.movements)
       }
     }
-    ws.onclose = () => console.log('WebSocket déconnecté')
     return () => ws.close()
   }, [token])
 
@@ -140,7 +149,9 @@ export default function App() {
           token={token}
           inventory={inventory}
           stockItems={stockItems}
+          serialRegistry={serialRegistry}
           forecast={forecast}
+          stockPolicies={stockPolicies}
           movements={movements}
           user={user}
           refresh={refreshData}

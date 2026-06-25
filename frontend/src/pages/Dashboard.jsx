@@ -37,7 +37,23 @@ function matchesSearch(record, normalizedQuery) {
   ].filter(Boolean).some(value => String(value).toLowerCase().includes(normalizedQuery))
 }
 
-export default function DashboardPage({ inventory, stockItems = [], movements = [], forecast, searchTerm = '' }) {
+function riskLevel(item) {
+  if (item.current_stock <= 0) return 'rupture'
+  if (item.manager_review_required) return 'critical'
+  if (item.current_stock <= item.reorder_threshold) return 'warning'
+  return 'ok'
+}
+
+function riskLabel(level) {
+  return {
+    rupture: 'Rupture',
+    critical: 'Avis responsable',
+    warning: 'Commander',
+    ok: 'OK',
+  }[level]
+}
+
+export default function DashboardPage({ inventory, stockItems = [], serialRegistry = { items: [], counts: {} }, movements = [], forecast, searchTerm = '' }) {
   const normalizedQuery = searchTerm.trim().toLowerCase()
   const filteredStockItems = stockItems.filter(item => matchesSearch(item, normalizedQuery))
   const filteredMovementsForStats = movements.filter(record => matchesSearch(record, normalizedQuery))
@@ -53,10 +69,28 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
   const totalExits = filteredMovementsForStats.filter(item => item.movement_type === 'Sortie').reduce((sum, item) => sum + item.quantity, 0)
   const activeTypes = chartData.filter(item => item.value > 0).length
   const history = useMemo(() => buildHistory(filteredMovementsForStats), [filteredMovementsForStats])
+  const knownTypes = new Set([
+    ...Object.entries(displayInventory).filter(([, value]) => value !== 0).map(([type]) => type),
+    ...filteredMovementsForStats.map(record => record.equipment_type),
+  ])
+  const topChartTypes = [...chartData]
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8)
+  const trackedSerials = serialRegistry.counts || {}
   const risks = [...(forecast?.risks || [])]
     .filter(item => !normalizedQuery || item.equipment_type.toLowerCase().includes(normalizedQuery))
-    .sort((a, b) => Number(b.exits_locked) - Number(a.exits_locked) || a.current_stock - b.current_stock)
-    .slice(0, 4)
+    .filter(item => knownTypes.has(item.equipment_type))
+    .map(item => ({ ...item, level: riskLevel(item) }))
+    .filter(item => item.level !== 'ok')
+    .sort((a, b) => {
+      const rank = { rupture: 0, critical: 1, warning: 2, ok: 3 }
+      return rank[a.level] - rank[b.level] || a.current_stock - b.current_stock
+    })
+    .slice(0, 6)
+  const knownRisks = (forecast?.risks || []).filter(item => knownTypes.has(item.equipment_type))
+  const ruptureCount = knownRisks.filter(item => riskLevel(item) === 'rupture').length
+  const criticalCount = knownRisks.filter(item => ['critical', 'warning'].includes(riskLevel(item))).length
   const filteredMovements = filteredMovementsForStats.slice(-8).reverse()
 
   return (
@@ -84,9 +118,14 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
           <small>Mouvements validés</small>
         </div>
         <div className="kpi-card">
-          <span>Types actifs</span>
-          <strong>{activeTypes}</strong>
-          <small>Catégories en stock</small>
+          <span>Séries disponibles</span>
+          <strong>{trackedSerials.in_stock || 0}</strong>
+          <small>{trackedSerials.exited || 0} sorties tracées</small>
+        </div>
+        <div className="kpi-card">
+          <span>Alertes stock</span>
+          <strong>{criticalCount}</strong>
+          <small>{ruptureCount} rupture(s), {activeTypes} type(s) actifs</small>
         </div>
       </div>
 
@@ -94,7 +133,7 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
         <div className="panel chart-panel">
           <div className="panel-heading">
             <h3>Évolution du stock</h3>
-            <span>Par type de matériel</span>
+            <span>Top {topChartTypes.length} types actifs</span>
           </div>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={history} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
@@ -102,7 +141,7 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
               <XAxis dataKey="date" />
               <YAxis allowDecimals={false} />
               <Tooltip />
-              {chartData.map((item, index) => (
+              {topChartTypes.map((item, index) => (
                 <Line
                   key={item.name}
                   type="monotone"
@@ -114,50 +153,51 @@ export default function DashboardPage({ inventory, stockItems = [], movements = 
               ))}
             </LineChart>
           </ResponsiveContainer>
-          <p className="chart-explanation">
-            Cette courbe montre le stock net disponible dans le temps. Une entrée fait monter la courbe du type concerné,
-            une sortie la fait descendre. Elle ne sépare donc pas les entrées et les sorties : elle affiche le résultat
-            final après chaque mouvement.
-          </p>
-        </div>
-
-        <div className="panel">
-          <div className="panel-heading">
-            <h3>Prévision pénurie</h3>
-            <span>{forecast?.recommendation || 'En attente de données'}</span>
-          </div>
-          <div className="risk-list">
-            {risks.map(item => (
-              <div
-                key={item.equipment_type}
-                className={`risk-item ${item.exits_locked || item.current_stock <= item.reorder_threshold ? 'risk-alert' : ''}`}
-              >
-                <div>
-                  <strong>
-                    {item.equipment_type}
-                    {(item.exits_locked || item.current_stock <= item.reorder_threshold) && (
-                      <span className="alert-badge">Commander</span>
-                    )}
-                  </strong>
-                  <span>{item.recommendation}</span>
-                  <span>Commande: {item.reorder_threshold} | Réserve: {item.emergency_reserve_threshold}</span>
-                </div>
-                <div>
-                  <strong>{item.current_stock}</strong>
-                  <span>{item.exits_locked ? 'Sorties bloquées' : item.estimated_days_to_empty ? `${item.estimated_days_to_empty} j` : 'N/A'}</span>
-                </div>
-              </div>
+          <div className="chart-legend">
+            {topChartTypes.map((item, index) => (
+              <span key={item.name}><i style={{ background: chartColors[index % chartColors.length] }} />{item.name}</span>
             ))}
           </div>
         </div>
 
         <div className="panel">
           <div className="panel-heading">
+            <h3>Prévision pénurie</h3>
+            <span>{risks.length ? `${risks.length} alerte(s) actionnable(s)` : 'Aucune alerte active'}</span>
+          </div>
+          <div className="risk-list">
+            {risks.length ? risks.map(item => (
+              <div
+                key={item.equipment_type}
+                className={`risk-item risk-${item.level}`}
+              >
+                <div>
+                  <strong>
+                    {item.equipment_type}
+                    <span className="alert-badge">{riskLabel(item.level)}</span>
+                  </strong>
+                  <span>{item.recommendation}</span>
+                  <span>Commande: {item.reorder_threshold} | Réserve: {item.emergency_reserve_threshold} | Cible: {item.target_stock}</span>
+                  <span>Délai: {item.lead_time_days} j | Sécurité: {item.safety_stock} | Écart-type: {item.demand_std_dev}/j</span>
+                </div>
+                <div>
+                  <strong>{item.current_stock}</strong>
+                  <span>{item.manager_review_required ? 'Avis requis' : item.estimated_days_to_empty ? `${item.estimated_days_to_empty} j` : 'N/A'}</span>
+                </div>
+              </div>
+            )) : (
+              <div className="empty-state">Stock au-dessus des seuils opérationnels.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-heading">
             <h3>Stock par catégorie</h3>
-            <span>Quantités disponibles</span>
+            <span>Top disponibilités</span>
           </div>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+            <BarChart data={[...chartData].filter(item => item.value > 0).sort((a, b) => b.value - a.value).slice(0, 10)} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
               <XAxis dataKey="name" />
               <YAxis allowDecimals={false} />

@@ -18,8 +18,8 @@ def runtime_dir() -> str:
 def writable_runtime_dir() -> str:
     if getattr(sys, "frozen", False):
         candidate_roots = [
-            os.getenv("PROGRAMDATA"),
             os.getenv("LOCALAPPDATA"),
+            os.getenv("PROGRAMDATA"),
             os.path.expanduser("~"),
         ]
         for base_dir in candidate_roots:

@@ -3,11 +3,12 @@ import csv
 import io
 import logging
 import base64
+import json
 import re
 import uuid
 from datetime import datetime, timedelta
-from math import ceil
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from math import ceil, sqrt
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .config import load_backend_env
@@ -23,10 +24,12 @@ from .models import (
     MovementType,
     ForecastResponse,
     PhotoUpload,
+    SERIALIZED_EQUIPMENT_TYPES,
     StockItem,
+    StockPolicyUpdate,
     UserProfileUpdate,
 )
-from .storage import append_movement, load_movements, init_db, engine, STORAGE_DIR
+from .storage import append_movement, load_movements, init_db, engine, STORAGE_DIR, classify_entry_serial_numbers, get_available_entry_serial_number_id, list_entry_serial_numbers, load_stock_policies, mark_serial_number_exited, register_entry_serial_numbers, update_stock_policy
 from .auth import authenticate_user, get_current_user, get_user_profile, hash_password, revoke_token, security, TOKENS, validate_password_policy, verify_password, password_policy_message
 from fastapi import Security
 from fastapi.security import HTTPAuthorizationCredentials
@@ -42,7 +45,10 @@ security_logger = logging.getLogger("assets_equity.security")
 app = FastAPI(title="Assets EquityBCDC Backend")
 allow_origins = [
     origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:48621,http://127.0.0.1:48621").split(",")
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:48621,http://127.0.0.1:48621,https://localhost:48620,https://127.0.0.1:48620",
+    ).split(",")
     if origin.strip()
 ]
 app.add_middleware(
@@ -67,6 +73,9 @@ UPLOAD_DIR = os.path.join(STORAGE_DIR, "uploads")
 ALLOWED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 ALLOWED_PHOTO_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_PHOTO_BYTES = 2 * 1024 * 1024
+MAX_SERIAL_IMPORT_BYTES = 2 * 1024 * 1024
+DEMAND_WINDOW_DAYS = 90
+
 
 
 def require_admin(username: str) -> dict:
@@ -145,6 +154,131 @@ def normalize_business_text(value):
     return str(value).replace("Depot IT", "Dépôt IT")
 
 
+def parse_serial_numbers(values: list[str] | None) -> list[str]:
+    cleaned = []
+    seen = set()
+    for value in values or []:
+        serial = " ".join(str(value or "").strip().split())
+        key = serial.casefold()
+        if serial and key not in seen:
+            cleaned.append(serial)
+            seen.add(key)
+    return cleaned
+
+
+def is_serialized_type(equipment_type: EquipmentType) -> bool:
+    return equipment_type in SERIALIZED_EQUIPMENT_TYPES
+
+
+def require_serials_for_entry(item: EquipmentItem, serial_numbers: list[str]) -> None:
+    if is_serialized_type(item.equipment_type) and len(serial_numbers) != item.quantity:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Ce type de matériel exige un numéro de série par unité. "
+                f"Quantité: {item.quantity}, séries fournies: {len(serial_numbers)}."
+            ),
+        )
+
+
+def normalize_header(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    normalized = normalized.replace("é", "e").replace("è", "e").replace("ê", "e")
+    normalized = normalized.replace("°", "").replace("'", " ")
+    normalized = re.sub(r"[^a-z0-9]+", "_", normalized).strip("_")
+    return normalized
+
+
+def extract_serials_from_rows(rows: list[list[object]]) -> list[str]:
+    rows = [[str(cell or "").strip() for cell in row] for row in rows]
+    rows = [row for row in rows if any(row)]
+    if not rows:
+        return []
+
+    serial_headers = {
+        "serial_number",
+        "numero_serie",
+        "numero_de_serie",
+        "n_serie",
+        "no_serie",
+        "serie",
+        "serial",
+        "s_n",
+        "sn",
+    }
+    first_row = [normalize_header(cell) for cell in rows[0]]
+    serial_index = next((index for index, header in enumerate(first_row) if header in serial_headers), None)
+    data_rows = rows[1:] if serial_index is not None else rows
+    if serial_index is None:
+        serial_index = 0
+
+    serials = []
+    for row in data_rows:
+        if len(row) <= serial_index:
+            continue
+        serial = row[serial_index].strip()
+        if serial:
+            serials.append(serial)
+    return parse_serial_numbers(serials)
+
+
+def decode_text_file(content: bytes) -> str:
+    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise HTTPException(status_code=400, detail="Le fichier est illisible. Utilisez un CSV encodé en UTF-8 ou ANSI.")
+
+
+def parse_csv_serials(content: bytes) -> list[str]:
+    text_content = decode_text_file(content)
+    sample = text_content[:2048]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=";,	,")
+    except csv.Error:
+        dialect = csv.excel
+        dialect.delimiter = ";"
+    reader = csv.reader(io.StringIO(text_content), dialect)
+    return extract_serials_from_rows(list(reader))
+
+
+def parse_xls_serials(content: bytes) -> list[str]:
+    try:
+        import xlrd
+    except ImportError:
+        try:
+            return parse_csv_serials(content)
+        except HTTPException:
+            raise HTTPException(
+                status_code=400,
+                detail="L'import XLS nécessite la dépendance xlrd. Installez les dépendances backend ou utilisez un CSV.",
+            )
+
+    workbook = xlrd.open_workbook(file_contents=content)
+    sheet = workbook.sheet_by_index(0)
+    rows = [
+        [sheet.cell_value(row_index, column_index) for column_index in range(sheet.ncols)]
+        for row_index in range(sheet.nrows)
+    ]
+    return extract_serials_from_rows(rows)
+
+
+async def parse_serial_import_file(file: UploadFile) -> list[str]:
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Le fichier importé est vide.")
+    if len(content) > MAX_SERIAL_IMPORT_BYTES:
+        raise HTTPException(status_code=400, detail="Le fichier ne doit pas dépasser 2 Mo.")
+
+    extension = os.path.splitext(file.filename or "")[1].lower()
+    if extension in {".csv", ".txt"}:
+        return parse_csv_serials(content)
+    if extension == ".xls":
+        return parse_xls_serials(content)
+    raise HTTPException(status_code=400, detail="Format accepté : CSV ou XLS.")
+
+
 def save_uploaded_photo(payload: PhotoUpload, username: str) -> str:
     match = re.match(r"^data:(?P<mime>[-\w.]+/[-\w.+]+);base64,(?P<data>.+)$", payload.data_url)
     if not match:
@@ -183,10 +317,15 @@ def save_uploaded_photo(payload: PhotoUpload, username: str) -> str:
 def compute_inventory(movements_list):
     inventory = {equipment_type: 0 for equipment_type in EquipmentType}
     for record in movements_list:
+        if is_serialized_type(record.equipment_type):
+            continue
         if record.movement_type == MovementType.entry:
             inventory[record.equipment_type] += record.quantity
         else:
             inventory[record.equipment_type] -= record.quantity
+    for serial in list_entry_serial_numbers():
+        if serial["status"] == "in_stock":
+            inventory[EquipmentType(serial["equipment_type"])] += 1
     return inventory
 
 
@@ -207,7 +346,21 @@ def stock_key(record):
 
 def build_stock_items() -> list[StockItem]:
     stock = {}
+    for serial in list_entry_serial_numbers(status="in_stock"):
+        equipment_type = EquipmentType(serial["equipment_type"])
+        if not is_serialized_type(equipment_type):
+            continue
+        stock[("serial", serial["id"])] = {
+            "material_id": serial["material_id"] or serial["id"],
+            "equipment_type": equipment_type,
+            "quantity": 1,
+            "serial_number": serial["serial_number"],
+            "model": None,
+        }
+
     for record in load_movements():
+        if is_serialized_type(record.equipment_type):
+            continue
         key = stock_key(record)
         if key not in stock:
             stock[key] = {
@@ -229,37 +382,90 @@ def build_stock_items() -> list[StockItem]:
     ]
 
 
-def get_available_quantity(item: EquipmentItem) -> int:
-    if item.material_id:
-        for stock_item in build_stock_items():
-            if stock_item.material_id == item.material_id:
-                return stock_item.quantity
-        return 0
-    key = (
-        item.equipment_type,
-        item.serial_number or "",
-        item.model or "",
-    )
-    for stock_item in build_stock_items():
-        if stock_key(stock_item) == key:
-            return stock_item.quantity
-    return 0
+def serial_registry_payload(status: str | None = None, q: str | None = None) -> dict:
+    items = list_entry_serial_numbers(status=status, q=q)
+    counts = {
+        "in_stock": sum(1 for item in items if item["status"] == "in_stock"),
+        "exited": sum(1 for item in items if item["status"] == "exited"),
+        "total": len(items),
+    }
+    return {"items": items, "counts": counts}
 
 
-def compute_stock_policy(current_stock: int, average_daily_exit: float) -> dict:
-    reorder_threshold = max(2, ceil(average_daily_exit * 5 + 2))
-    emergency_reserve_threshold = max(1, ceil(average_daily_exit * 2 + 1))
-    exits_locked = current_stock <= emergency_reserve_threshold
-    if exits_locked:
-        recommendation = "Réserve d'urgence atteinte - sorties bloquées"
+def policy_for_type(equipment_type: EquipmentType | None) -> dict:
+    if not equipment_type:
+        return {
+            "lead_time_days": 14,
+            "emergency_days": 5,
+            "minimum_stock": 2,
+            "target_days": 30,
+            "service_factor": 1.28,
+        }
+    return load_stock_policies()[equipment_type.value]
+
+
+def daily_exit_series(movements_list: list[MovementRecord], equipment_type: EquipmentType | None, window_days: int) -> list[int]:
+    today = datetime.utcnow().date()
+    day_totals = {
+        today - timedelta(days=offset): 0
+        for offset in range(window_days)
+    }
+    cutoff = datetime.utcnow() - timedelta(days=window_days)
+    for movement in movements_list:
+        if movement.movement_type != MovementType.exit or movement.timestamp < cutoff:
+            continue
+        if equipment_type and movement.equipment_type != equipment_type:
+            continue
+        day = movement.timestamp.date()
+        if day in day_totals:
+            day_totals[day] += movement.quantity
+    return [day_totals[day] for day in sorted(day_totals)]
+
+
+def demand_stats(movements_list: list[MovementRecord], equipment_type: EquipmentType | None, window_days: int = DEMAND_WINDOW_DAYS) -> dict:
+    series = daily_exit_series(movements_list, equipment_type, window_days)
+    average = sum(series) / window_days if window_days else 0.0
+    variance = sum((value - average) ** 2 for value in series) / window_days if window_days else 0.0
+    return {
+        "average_daily_exit": average,
+        "demand_std_dev": sqrt(variance),
+        "window_days": window_days,
+    }
+
+
+def compute_stock_policy(current_stock: int, average_daily_exit: float, demand_std_dev: float, equipment_type: EquipmentType | None = None) -> dict:
+    policy = policy_for_type(equipment_type)
+    lead_time_days = policy["lead_time_days"]
+    emergency_days = policy["emergency_days"]
+    minimum_stock = policy["minimum_stock"]
+    service_factor = policy["service_factor"]
+
+    lead_time_demand = average_daily_exit * lead_time_days
+    emergency_demand = average_daily_exit * emergency_days
+    safety_stock = ceil(service_factor * demand_std_dev * sqrt(lead_time_days))
+    emergency_safety_stock = ceil(service_factor * demand_std_dev * sqrt(emergency_days))
+
+    reorder_threshold = max(minimum_stock, ceil(lead_time_demand + safety_stock))
+    emergency_reserve_threshold = max(minimum_stock, ceil(emergency_demand + emergency_safety_stock))
+    target_stock = max(reorder_threshold, ceil(average_daily_exit * policy["target_days"] + safety_stock))
+    manager_review_required = current_stock <= emergency_reserve_threshold
+
+    if current_stock <= 0:
+        recommendation = "Rupture - réapprovisionnement prioritaire"
+    elif manager_review_required:
+        recommendation = "Réserve d'urgence atteinte - avis responsable requis"
     elif current_stock <= reorder_threshold:
-        recommendation = "Risque de pénurie"
+        recommendation = "Point de commande atteint"
     else:
         recommendation = "Stock maîtrisé"
     return {
+        "lead_time_days": lead_time_days,
+        "safety_stock": safety_stock,
         "reorder_threshold": reorder_threshold,
         "emergency_reserve_threshold": emergency_reserve_threshold,
-        "exits_locked": exits_locked,
+        "target_stock": target_stock,
+        "exits_locked": False,
+        "manager_review_required": manager_review_required,
         "recommendation": recommendation,
     }
 
@@ -269,7 +475,7 @@ def get_type_stock(equipment_type: EquipmentType) -> int:
     return inventory[equipment_type]
 
 
-def validate_emergency_reserve(item: EquipmentItem) -> None:
+def assess_manager_review(item: EquipmentItem) -> dict:
     forecast = build_forecast()
     risk = next(
         risk_item
@@ -277,33 +483,24 @@ def validate_emergency_reserve(item: EquipmentItem) -> None:
         if risk_item.equipment_type == item.equipment_type
     )
     remaining_stock = risk.current_stock - item.quantity
-    if risk.exits_locked:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Sortie bloquée: la réserve d'urgence pour {item.equipment_type.value} "
-                f"est atteinte ({risk.current_stock}/{risk.emergency_reserve_threshold})."
-            ),
-        )
-    if remaining_stock < risk.emergency_reserve_threshold:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Sortie bloquée: cette opération ferait passer {item.equipment_type.value} "
-                f"sous la réserve d'urgence ({risk.emergency_reserve_threshold})."
-            ),
-        )
+    review_required = risk.manager_review_required or remaining_stock < risk.emergency_reserve_threshold
+    return {
+        "manager_review_required": review_required,
+        "current_stock": risk.current_stock,
+        "remaining_stock": remaining_stock,
+        "emergency_reserve_threshold": risk.emergency_reserve_threshold,
+        "reorder_threshold": risk.reorder_threshold,
+        "recommendation": risk.recommendation,
+    }
 
 
 def build_forecast() -> ForecastResponse:
     movements_list = load_movements()
-    cutoff = datetime.utcnow() - timedelta(days=30)
-    last_30 = [m for m in movements_list if m.movement_type == MovementType.exit and m.timestamp >= cutoff]
-    total_exit = sum(m.quantity for m in last_30)
-    avg_daily = total_exit / 30 if total_exit else 0.0
+    global_stats = demand_stats(movements_list, None)
+    avg_daily = global_stats["average_daily_exit"]
     inventory = compute_inventory(movements_list)
     current_stock = sum(inventory.values())
-    global_policy = compute_stock_policy(current_stock, avg_daily)
+    global_policy = compute_stock_policy(current_stock, avg_daily, global_stats["demand_std_dev"], None)
     reorder_threshold = max(10, global_policy["reorder_threshold"])
     estimated_days = current_stock / avg_daily if avg_daily > 0 else None
     recommendation = (
@@ -311,23 +508,26 @@ def build_forecast() -> ForecastResponse:
     )
     risks = []
     for equipment_type in EquipmentType:
-        type_exit = sum(
-            m.quantity
-            for m in last_30
-            if m.equipment_type == equipment_type
-        )
-        type_avg_daily = type_exit / 30 if type_exit else 0.0
+        type_stats = demand_stats(movements_list, equipment_type)
+        type_avg_daily = type_stats["average_daily_exit"]
+        type_std_dev = type_stats["demand_std_dev"]
         type_stock = inventory[equipment_type]
-        type_policy = compute_stock_policy(type_stock, type_avg_daily)
+        type_policy = compute_stock_policy(type_stock, type_avg_daily, type_std_dev, equipment_type)
         type_days = type_stock / type_avg_daily if type_avg_daily > 0 else None
         risks.append(ForecastRisk(
             equipment_type=equipment_type,
             current_stock=type_stock,
             average_daily_exit=round(type_avg_daily, 2),
+            demand_std_dev=round(type_std_dev, 2),
+            demand_window_days=type_stats["window_days"],
+            lead_time_days=type_policy["lead_time_days"],
+            safety_stock=type_policy["safety_stock"],
             reorder_threshold=type_policy["reorder_threshold"],
             emergency_reserve_threshold=type_policy["emergency_reserve_threshold"],
+            target_stock=type_policy["target_stock"],
             estimated_days_to_empty=round(type_days, 1) if type_days else None,
             exits_locked=type_policy["exits_locked"],
+            manager_review_required=type_policy["manager_review_required"],
             recommendation=type_policy["recommendation"],
         ))
     return ForecastResponse(
@@ -554,6 +754,32 @@ def get_forecast(current_user: str = Depends(get_current_user)):
     return build_forecast().dict()
 
 
+@app.get("/stock-policies")
+def get_stock_policies(current_user: str = Depends(get_current_user)):
+    require_roles(current_user, {"admin", "user", "manager", "auditor"})
+    return {"policies": list(load_stock_policies().values())}
+
+
+@app.put("/stock-policies")
+def put_stock_policy(
+    payload: StockPolicyUpdate,
+    request: Request,
+    equipment_type: EquipmentType = Query(..., alias="type"),
+    current_user: str = Depends(get_current_user),
+):
+    require_roles(current_user, {"admin", "manager"})
+    updated = update_stock_policy(equipment_type, payload.dict())
+    audit_log(
+        current_user,
+        "update_stock_policy",
+        "stock_policy",
+        equipment_type.value,
+        new_value=json.dumps(updated, ensure_ascii=False),
+        request=request,
+    )
+    return {"policy": updated, "forecast": build_forecast().dict()}
+
+
 @app.get("/stock-items")
 def get_stock_items(current_user: str = Depends(get_current_user)):
     require_roles(current_user, {"admin", "user", "manager", "auditor"})
@@ -563,6 +789,32 @@ def get_stock_items(current_user: str = Depends(get_current_user)):
 @app.post("/entries")
 def add_entry(item: EquipmentItem, background_tasks: BackgroundTasks, request: Request, current_user: str = Depends(get_current_user)):
     require_roles(current_user, {"admin", "user", "manager"})
+    serial_numbers = parse_serial_numbers(item.serial_numbers)
+    require_serials_for_entry(item, serial_numbers)
+    if serial_numbers and not is_serialized_type(item.equipment_type):
+        raise HTTPException(
+            status_code=400,
+            detail="Les numéros de série ne sont acceptés que pour les matériels traçables individuellement.",
+        )
+    if len(serial_numbers) > item.quantity:
+        raise HTTPException(
+            status_code=400,
+            detail="Le nombre de numéros de série ne peut pas dépasser la quantité entrée.",
+        )
+    serial_classification = classify_entry_serial_numbers(serial_numbers)
+    if serial_numbers and serial_classification["duplicates"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Numéro(s) déjà en stock: {', '.join(serial_classification['duplicates'][:5])}",
+        )
+    if serial_numbers and serial_classification["already_exited"]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Numéro(s) déjà sortis. Une réactivation doit être traitée par contrôle séparé: "
+                f"{', '.join(serial_classification['already_exited'][:5])}"
+            ),
+        )
     record = MovementRecord(
         id=0,
         timestamp=datetime.utcnow(),
@@ -578,35 +830,148 @@ def add_entry(item: EquipmentItem, background_tasks: BackgroundTasks, request: R
         notes=item.notes,
     )
     persisted = append_movement(record)
+    serial_report = register_entry_serial_numbers(persisted, serial_numbers)
     background_tasks.add_task(manager.broadcast, {
         "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
         "stock_items": [stock_item.dict() for stock_item in build_stock_items()],
+        "serial_registry": serial_registry_payload(),
         "movements": [movement.dict() for movement in load_movements()],
     })
-    audit_log(current_user, "create_entry", "movement", str(persisted.id), new_value=persisted.json(), request=request)
-    return {"status": "ok", "movement": persisted.dict()}
+    audit_log(
+        current_user,
+        "create_entry",
+        "movement",
+        str(persisted.id),
+        new_value=json.dumps({
+            "movement": persisted.dict(),
+            "serial_numbers": serial_numbers,
+            "serial_report": serial_report,
+        }, default=str, ensure_ascii=False),
+        request=request,
+    )
+    return {"status": "ok", "movement": persisted.dict(), "serial_report": serial_report}
+
+
+@app.post("/entries/serial-import")
+async def import_entry_serial_numbers(
+    background_tasks: BackgroundTasks,
+    request: Request,
+    equipment_type: EquipmentType = Form(..., alias="type"),
+    notes: str | None = Form(default=None),
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user),
+):
+    require_roles(current_user, {"admin", "manager"})
+    if not is_serialized_type(equipment_type):
+        raise HTTPException(
+            status_code=400,
+            detail="L'import de numéros de série est réservé aux matériels traçables individuellement.",
+        )
+    serial_numbers = await parse_serial_import_file(file)
+    if not serial_numbers:
+        raise HTTPException(status_code=400, detail="Aucun numéro de série valide n'a été trouvé dans le fichier.")
+    serial_classification = classify_entry_serial_numbers(serial_numbers)
+    new_serial_numbers = serial_classification["new"]
+    if not new_serial_numbers:
+        raise HTTPException(
+            status_code=400,
+            detail="Aucune nouvelle série à importer. Le fichier contient uniquement des doublons ou des séries déjà sorties.",
+        )
+
+    record = MovementRecord(
+        id=0,
+        timestamp=datetime.utcnow(),
+        movement_type=MovementType.entry,
+        material_id=None,
+        equipment_type=equipment_type,
+        quantity=len(new_serial_numbers),
+        serial_number=None,
+        model=None,
+        destination=None,
+        taken_by=None,
+        initiated_by=current_user,
+        notes=notes or f"Import de {len(new_serial_numbers)} numéro(s) de série depuis {file.filename}",
+    )
+    persisted = append_movement(record)
+    serial_report = register_entry_serial_numbers(persisted, new_serial_numbers)
+    serial_report["duplicates"] = serial_classification["duplicates"]
+    serial_report["already_exited"] = serial_classification["already_exited"]
+    background_tasks.add_task(manager.broadcast, {
+        "inventory": get_inventory_data(),
+        "forecast": build_forecast().dict(),
+        "stock_items": [stock_item.dict() for stock_item in build_stock_items()],
+        "serial_registry": serial_registry_payload(),
+        "movements": [movement.dict() for movement in load_movements()],
+    })
+    audit_log(
+        current_user,
+        "import_entry_serial_numbers",
+        "serial_number",
+        str(persisted.id),
+        new_value=json.dumps({
+            "movement": persisted.dict(),
+            "filename": file.filename,
+            "serial_count": len(new_serial_numbers),
+            "serial_numbers": new_serial_numbers,
+            "serial_report": serial_report,
+        }, default=str, ensure_ascii=False),
+        request=request,
+    )
+    return {
+        "status": "ok",
+        "movement": persisted.dict(),
+        **serial_report,
+        "read": len(serial_numbers),
+    }
 
 
 @app.post("/exits")
 def add_exit(item: EquipmentItem, background_tasks: BackgroundTasks, request: Request, current_user: str = Depends(get_current_user)):
     require_roles(current_user, {"admin", "user", "manager"})
-    if not item.serial_number or not item.serial_number.strip():
-        raise HTTPException(status_code=400, detail="Le numéro de série est obligatoire pour une sortie.")
-    if not item.model or not item.model.strip():
-        raise HTTPException(status_code=400, detail="Le modèle est obligatoire pour une sortie.")
     if not item.destination or not item.destination.strip():
         raise HTTPException(status_code=400, detail="La destination est obligatoire pour une sortie.")
     if not item.taken_by or not item.taken_by.strip():
         raise HTTPException(status_code=400, detail="La personne qui prend le matériel est obligatoire.")
-    available_quantity = get_available_quantity(item)
+    serialized_exit = is_serialized_type(item.equipment_type)
+    entry_serial_number_id = None
+    if serialized_exit:
+        if not item.serial_number or not item.serial_number.strip():
+            raise HTTPException(status_code=400, detail="Le numéro de série est obligatoire pour une sortie de matériel traçable.")
+        if not item.model or not item.model.strip():
+            raise HTTPException(status_code=400, detail="Le modèle est obligatoire pour une sortie de matériel traçable.")
+        if item.quantity != 1:
+            raise HTTPException(status_code=400, detail="Une sortie identifiée par numéro de série doit concerner une seule unité.")
+        entry_serial_number_id = get_available_entry_serial_number_id(item.serial_number, item.equipment_type)
+        if not entry_serial_number_id:
+            audit_log(
+                current_user,
+                "unknown_serial_exit_attempt",
+                "serial_number",
+                item.serial_number.strip(),
+                new_value=json.dumps({
+                    "type": item.equipment_type.value,
+                    "serial_number": item.serial_number.strip(),
+                    "model": item.model,
+                    "destination": item.destination,
+                    "taken_by": item.taken_by,
+                    "quantity": item.quantity,
+                }, ensure_ascii=False),
+                request=request,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail="Sortie bloquée: ce numéro de série n'a pas été enregistré dans les entrées.",
+            )
+    available_quantity = 1 if serialized_exit else get_type_stock(item.equipment_type)
     if available_quantity <= 0:
         raise HTTPException(status_code=400, detail="Ce matériel n'existe pas dans le stock disponible.")
     if available_quantity < item.quantity:
         raise HTTPException(status_code=400, detail="Quantité insuffisante pour ce matériel en stock.")
-    validate_emergency_reserve(item)
+    review = assess_manager_review(item)
     record = MovementRecord(
         id=0,
+        entry_serial_number_id=entry_serial_number_id,
         timestamp=datetime.utcnow(),
         movement_type=MovementType.exit,
         material_id=item.material_id,
@@ -620,14 +985,39 @@ def add_exit(item: EquipmentItem, background_tasks: BackgroundTasks, request: Re
         notes=item.notes,
     )
     persisted = append_movement(record)
+    if serialized_exit:
+        mark_serial_number_exited(item.serial_number, persisted.id)
+    if review["manager_review_required"]:
+        audit_log(
+            current_user,
+            "manager_review_required_exit",
+            "movement",
+            str(persisted.id),
+            new_value=json.dumps({
+                "movement": persisted.dict(),
+                "review": review,
+            }, default=str, ensure_ascii=False),
+            request=request,
+        )
     background_tasks.add_task(manager.broadcast, {
         "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
         "stock_items": [stock_item.dict() for stock_item in build_stock_items()],
+        "serial_registry": serial_registry_payload(),
         "movements": [movement.dict() for movement in load_movements()],
     })
     audit_log(current_user, "create_exit", "movement", str(persisted.id), new_value=persisted.json(), request=request)
-    return {"status": "ok", "movement": persisted.dict()}
+    return {"status": "ok", "movement": persisted.dict(), "manager_review": review}
+
+
+@app.get("/serial-registry")
+def get_serial_registry(
+    status: str | None = Query(default=None, pattern="^(in_stock|exited)$"),
+    q: str | None = Query(default=None),
+    current_user: str = Depends(get_current_user),
+):
+    require_roles(current_user, {"admin", "user", "manager", "auditor"})
+    return serial_registry_payload(status=status, q=q)
 
 
 @app.get("/exports/movements.csv")
@@ -637,7 +1027,7 @@ def export_movements_csv(request: Request, current_user: str = Depends(get_curre
     output.write("\ufeff")
     writer = csv.writer(output, delimiter=";")
     writer.writerow([
-        "id", "material_id", "timestamp", "movement_type", "equipment_type",
+        "id", "material_id", "entry_serial_number_id", "timestamp", "movement_type", "equipment_type",
         "quantity", "serial_number", "model", "destination", "taken_by",
         "initiated_by", "notes",
     ])
@@ -645,6 +1035,7 @@ def export_movements_csv(request: Request, current_user: str = Depends(get_curre
         writer.writerow([
             movement.id,
             movement.material_id,
+            movement.entry_serial_number_id,
             movement.timestamp.isoformat(),
             movement.movement_type.value,
             movement.equipment_type.value,
@@ -681,6 +1072,7 @@ def notify_update(background_tasks: BackgroundTasks, current_user: str = Depends
         "inventory": get_inventory_data(),
         "forecast": build_forecast().dict(),
         "stock_items": [stock_item.dict() for stock_item in build_stock_items()],
+        "serial_registry": serial_registry_payload(),
     }
     background_tasks.add_task(manager.broadcast, payload)
     return {"status": "broadcast_sent"}
@@ -691,7 +1083,7 @@ def get_audit_logs(current_user: str = Depends(get_current_user)):
     require_roles(current_user, {"admin", "auditor"})
     with engine.connect() as conn:
         rows = conn.execute(text(
-            "SELECT actor_username, action, entity_type, entity_id, ip_address, user_agent, created_at "
+            "SELECT actor_username, action, entity_type, entity_id, new_value, ip_address, user_agent, created_at "
             "FROM audit_logs ORDER BY id DESC LIMIT 200"
         )).mappings().all()
     return {"audit_logs": [dict(row) for row in rows]}

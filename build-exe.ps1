@@ -1,5 +1,5 @@
-# PowerShell script to build launcher.exe using PyInstaller
-# Run this from project root: Open PowerShell as admin then:
+# PowerShell script to build the production AssetsEquityBCDC executable.
+# Run this from project root:
 # .\build-exe.ps1
 
 $ErrorActionPreference = 'Stop'
@@ -15,11 +15,21 @@ if (Test-Path $venvPython) {
 }
 Write-Host "Using python: $python"
 
-# Ensure pyinstaller is installed
-& $python -m pip install --upgrade pip
-& $python -m pip install pyinstaller
+& npm --prefix frontend run build
 
-# Build onefile exe (console enabled so you can see logs)
-& $python -m PyInstaller --noconfirm --onefile --name AssetsEquityLauncher launcher.py
+& $python -m PyInstaller --noconfirm AssetsEquityBCDC.spec
 
-Write-Host "Build finished. Executable in dist\AssetsEquityLauncher.exe"
+$packageDir = Join-Path $ROOT 'dist\AssetsEquityBCDC'
+Copy-Item -LiteralPath (Join-Path $ROOT 'docs\INSTALLATION_OFFLINE_FR.txt') -Destination $packageDir -Force
+Copy-Item -LiteralPath (Join-Path $ROOT 'docs\INSTALLATION_OFFLINE_EN.txt') -Destination $packageDir -Force
+New-Item -ItemType Directory -Force -Path (Join-Path $packageDir 'tools') | Out-Null
+Copy-Item -LiteralPath (Join-Path $ROOT 'scripts\create-local-https-cert.ps1') -Destination (Join-Path $packageDir 'tools') -Force
+
+$zipPath = Join-Path $ROOT 'dist\AssetsEquityBCDC-package.zip'
+if (Test-Path $zipPath) {
+    Remove-Item -LiteralPath $zipPath -Force
+}
+Compress-Archive -Path (Join-Path $packageDir '*') -DestinationPath $zipPath -Force
+
+Write-Host "Build finished. Executable in dist\AssetsEquityBCDC\AssetsEquityBCDC.exe"
+Write-Host "Offline package: dist\AssetsEquityBCDC-package.zip"

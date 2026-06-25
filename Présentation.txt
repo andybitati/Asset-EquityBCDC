@@ -1,0 +1,97 @@
+Description De L’Application
+Assets Equity BCDC est une application de gestion de stock informatique conçue pour suivre, contrôler et auditer les entrées et sorties de matériels IT : desktops, laptops, moniteurs, imprimantes, scanners, switchs, routeurs, webcams, câbles, adaptateurs, consommables et autres équipements.
+L’objectif principal est de donner au responsable IT une vision fiable du stock disponible, de tracer les mouvements de matériel, de sécuriser les sorties par numéro de série lorsque nécessaire, et d’anticiper les risques de rupture grâce à des seuils calculés.
+Problème Résolu
+Avant ce type d’application, la gestion de stock repose souvent sur Excel, des échanges informels ou des notes dispersées. Cela pose plusieurs problèmes :
+difficulté à savoir exactement ce qui est disponible ;
+absence de traçabilité fiable des sorties ;
+risque de sortie d’un matériel dont le numéro de série n’a jamais été enregistré ;
+manque d’audit sur les actions des utilisateurs ;
+anticipation faible des ruptures ;
+dépendance à une connexion Internet ou à un environnement technique complexe.
+L’application apporte donc une solution centralisée, offline, traçable et exploitable par des responsables métier.
+Fonctionnalités Principales
+Gestion des entrées de stock
+L’utilisateur peut enregistrer une entrée de matériel avec son type, sa quantité et une note. Pour les matériels traçables individuellement, comme les laptops, desktops, moniteurs, routeurs ou scanners, l’application exige un numéro de série par unité.
+
+Import des numéros de série
+Les numéros de série peuvent être importés via fichier CSV ou XLS. Cela permet de charger rapidement un lot de machines sans saisir manuellement chaque série.
+
+Registre des numéros de série
+Une table dédiée conserve les numéros de série entrés. Chaque série possède un statut : en stock ou sortie. Cela garantit qu’une machine ne peut sortir que si son numéro de série a réellement été enregistré à l’entrée.
+
+Sorties de matériel
+Pour les matériels traçables, la sortie doit être rattachée à un numéro de série existant. L’identifiant de ce numéro de série est attaché au mouvement de sortie via entry_serial_number_id.
+Pour les consommables non traçables, comme câbles ou adaptateurs, la sortie se fait par quantité, sans polluer le registre des séries.
+
+Dashboard
+Le dashboard présente les indicateurs essentiels : stock total, entrées, sorties, séries disponibles, alertes de stock, évolution du stock et prévisions de rupture.
+
+Politiques de stock
+L’application permet de configurer les paramètres utilisés pour les seuils : délai fournisseur, réserve d’urgence, stock minimum, couverture cible, facteur de service. Les seuils ne sont donc pas magiques : ils reposent sur des hypothèses visibles et ajustables.
+
+Prévision des ruptures
+Les seuils utilisent la consommation moyenne, l’écart-type de la demande, le délai fournisseur et un stock de sécurité. Cela donne une base plus rigoureuse qu’un simple seuil arbitraire.
+
+Avis responsable
+Lorsque le stock atteint une zone critique, l’application ne bloque pas automatiquement la sortie. Elle demande plutôt l’avis du responsable et trace l’opération. C’est plus réaliste opérationnellement.
+
+Audit
+Les actions importantes sont journalisées : connexion, création d’entrée, sortie, tentative de sortie avec série inconnue, import, modification de politique de stock, etc.
+
+Export CSV
+Les mouvements peuvent être exportés pour analyse, archivage ou reporting.
+
+Fonctionnement offline
+L’application est livrée sous forme de package exécutable. Elle ne nécessite pas Internet, Node.js, Python, npm ou environnement virtuel sur la machine cible.
+
+Support HTTPS
+L’application peut fonctionner en HTTPS avec un certificat local ou un certificat interne d’entreprise. Un script offline permet de générer un certificat auto-signé pour les tests.
+
+Technologies Utilisées
+Frontend : React
+React est utilisé pour construire l’interface utilisateur. Il permet de créer des écrans dynamiques : dashboard, stock, mouvements, registre des séries, audit, politiques de stock. Son utilité est de rendre l’application interactive et fluide.
+Vite
+Vite sert à construire et optimiser le frontend. Il produit les fichiers statiques finaux intégrés dans l’exécutable. Son avantage est la rapidité du build et la simplicité d’intégration.
+Recharts
+Recharts est utilisé pour les graphiques du dashboard. Il permet d’afficher l’évolution du stock, les catégories et les indicateurs visuels utiles à la décision.
+Backend : Python
+Python est utilisé pour la logique métier : calcul du stock, validation des entrées/sorties, import des fichiers, calcul des seuils, audit et gestion des utilisateurs.
+FastAPI
+FastAPI expose les routes API de l’application : login, stock, mouvements, entrées, sorties, registre de séries, prévisions, audit, export CSV. Son intérêt est sa performance, sa clarté et sa validation automatique des données.
+Pydantic
+Pydantic valide les données reçues par l’API. Il garantit que les quantités, types de matériel, politiques de stock et autres champs respectent les règles attendues.
+SQLAlchemy
+SQLAlchemy gère l’accès à la base de données. Il permet à l’application de fonctionner avec SQLite en local ou MySQL en production, sans réécrire toute la logique.
+SQLite
+SQLite est utilisé comme base locale par défaut. Son utilité est de permettre une installation offline simple, sans serveur de base de données.
+MySQL / PyMySQL
+MySQL est supporté pour un déploiement plus institutionnel ou centralisé. PyMySQL permet à Python de se connecter à MySQL.
+WebSocket
+Les WebSockets permettent de rafraîchir certaines données en temps réel, comme le stock ou les mouvements, sans recharger toute l’application.
+PyInstaller
+PyInstaller transforme l’application Python + frontend compilé en package exécutable Windows. C’est ce qui permet de livrer l’application sous forme de .exe.
+PowerShell
+PowerShell est utilisé pour le script de build et pour l’outil de génération de certificat HTTPS local. Il facilite l’installation et l’exploitation sur Windows.
+HTML / CSS
+Le frontend compilé produit du HTML, CSS et JavaScript. Le CSS définit l’apparence de l’application : sidebar, dashboard, tableaux, formulaires, badges, alertes et responsive design.
+HTTPS / SSL
+Le support SSL permet de faire tourner l’application en HTTPS. C’est important pour une utilisation plus sérieuse, surtout si l’application est exposée sur un réseau interne.
+Architecture Générale
+L’application suit une architecture simple :
+Utilisateur
+   ↓
+Interface React
+   ↓
+API FastAPI
+   ↓
+Logique métier Python
+   ↓
+Base de données SQLite ou MySQL
+En mode .exe, le frontend est embarqué avec le backend. L’utilisateur lance AssetsEquityBCDC.exe, puis accède à l’application dans son navigateur local.
+Valeur Du Projet
+La valeur du projet est triple :
+opérationnelle : savoir exactement quel matériel est disponible ;
+sécuritaire : empêcher les sorties non maîtrisées de machines traçables ;
+décisionnelle : anticiper les besoins de commande avec des métriques explicites.
+L’application ne se limite donc pas à enregistrer des lignes de stock. Elle introduit une vraie logique de contrôle, de traçabilité et d’aide à la décision.

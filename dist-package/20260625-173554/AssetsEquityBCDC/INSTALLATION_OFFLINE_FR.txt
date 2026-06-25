@@ -1,0 +1,158 @@
+ASSETS EQUITY BCDC - INSTALLATION OFFLINE
+=========================================
+
+Version du guide : 2026-06-25
+
+1. Contenu du package
+---------------------
+Le package offline doit contenir au minimum :
+
+- AssetsEquityBCDC.exe
+- le dossier _internal
+- INSTALLATION_OFFLINE_FR.txt
+- INSTALLATION_OFFLINE_EN.txt
+
+Important : ne copiez pas uniquement le fichier .exe. Cette application est livrée en mode "dossier complet" : l'exécutable dépend des fichiers embarqués dans _internal.
+
+2. Prérequis
+------------
+Le poste Windows cible n'a pas besoin d'Internet, de Node.js, de Python, de npm ni d'un environnement virtuel.
+
+Prérequis attendus :
+
+- Windows 10 ou Windows 11 64 bits ;
+- droits de lecture/exécution sur le dossier où l'application est déposée ;
+- port local 48620 disponible par défaut ;
+- navigateur web moderne installé.
+
+3. Installation locale
+----------------------
+1. Décompressez l'archive AssetsEquityBCDC-package.zip.
+2. Placez le dossier AssetsEquityBCDC dans un emplacement autorisé, par exemple :
+   - C:\Users\<utilisateur>\Documents\AssetsEquityBCDC
+   - D:\Applications\AssetsEquityBCDC
+3. Ouvrez le dossier AssetsEquityBCDC.
+4. Lancez AssetsEquityBCDC.exe.
+5. Le navigateur s'ouvre automatiquement sur :
+   http://127.0.0.1:48620
+
+Si le navigateur ne s'ouvre pas, saisissez manuellement l'adresse ci-dessus.
+
+4. Données locales
+------------------
+Sans configuration MySQL, l'application utilise une base SQLite locale.
+
+Les données applicatives sont stockées dans un dossier utilisateur Windows accessible à l'application, généralement :
+
+%LOCALAPPDATA%\Assets Equity BCDC
+
+ou, si ce chemin n'est pas disponible :
+
+%PROGRAMDATA%\Assets Equity BCDC
+
+ou un dossier défini explicitement par la variable STORAGE_DIR.
+
+5. Configuration optionnelle par fichier .env
+---------------------------------------------
+Un fichier .env peut être placé à côté de AssetsEquityBCDC.exe pour personnaliser l'exécution.
+
+Exemple :
+
+ASSET_EQUITY_PORT=48620
+ASSET_EQUITY_HOST=127.0.0.1
+ASSET_EQUITY_OPEN_BROWSER=true
+STORAGE_DIR=D:\AssetsEquityBCDC\data
+
+Pour utiliser MySQL au lieu de SQLite :
+
+DATABASE_URL=mysql+pymysql://utilisateur:motdepasse@127.0.0.1:3306/asset_equity
+
+Le script SQL de création MySQL est inclus dans le package sous :
+
+_internal\backend\mysql-init.sql
+
+6. HTTPS local ou réseau
+------------------------
+L'application peut fonctionner en HTTPS si un certificat et une clé privée PEM sont fournis.
+
+Configuration minimale dans le fichier .env placé à côté de AssetsEquityBCDC.exe :
+
+ASSET_EQUITY_PORT=48620
+ASSET_EQUITY_HOST=127.0.0.1
+ASSET_EQUITY_OPEN_BROWSER=true
+ASSET_EQUITY_SSL_CERTFILE=certs\localhost-cert.pem
+ASSET_EQUITY_SSL_KEYFILE=certs\localhost-key.pem
+
+Après redémarrage, l'application ouvre :
+
+https://127.0.0.1:48620
+
+Option recommandée en entreprise :
+- utilisez un certificat émis par l'autorité interne de l'organisation ;
+- placez le certificat et la clé dans un dossier certs à côté de l'exécutable ;
+- renseignez ASSET_EQUITY_SSL_CERTFILE et ASSET_EQUITY_SSL_KEYFILE dans .env.
+
+Option offline auto-signée :
+1. Ouvrez PowerShell dans le dossier AssetsEquityBCDC.
+2. Exécutez :
+   powershell -ExecutionPolicy Bypass -File .\tools\create-local-https-cert.ps1
+3. Copiez le contenu de certs\.env.https.example dans un fichier .env à côté de l'exécutable.
+4. Relancez AssetsEquityBCDC.exe.
+
+Attention : un certificat auto-signé déclenche normalement un avertissement navigateur tant qu'il n'est pas approuvé dans le magasin de certificats Windows. C'est acceptable pour un test local, mais pas idéal pour un déploiement d'entreprise.
+
+7. Identifiants initiaux
+------------------------
+Si aucune configuration spécifique n'est fournie, les comptes initiaux sont ceux prévus par l'application.
+
+Après la première connexion, créez ou mettez à jour les comptes utilisateurs depuis l'interface d'administration. Ne conservez pas un mot de passe de démonstration en production.
+
+8. Règles métier importantes
+----------------------------
+- Les matériels traçables sortent uniquement avec un numéro de série enregistré à l'entrée.
+- La sortie d'un matériel traçable rattache l'identifiant du numéro de série au mouvement sortant.
+- Les consommables non traçables sortent par quantité et ne polluent pas le registre des numéros de série.
+- Les seuils bas ne bloquent pas automatiquement la sortie ; ils déclenchent un avis responsable et une trace d'audit.
+- Les paramètres de seuil sont consultables et modifiables dans l'écran "Politiques stock".
+
+9. Vérification après installation
+----------------------------------
+Après lancement :
+
+1. Vérifiez que la page de connexion s'affiche.
+2. Connectez-vous.
+3. Ouvrez le dashboard.
+4. Vérifiez que les menus Stock, Registre séries, Mouvements, Export CSV, Audit et Politiques stock apparaissent selon le rôle utilisateur.
+5. Faites un test simple d'entrée puis de sortie sur un matériel non critique.
+
+10. Dépannage
+------------
+L'application ne démarre pas :
+- vérifiez que le dossier _internal est présent ;
+- vérifiez qu'un antivirus n'a pas isolé l'exécutable ;
+- lancez l'application depuis un dossier utilisateur autorisé ;
+- essayez de définir STORAGE_DIR vers un dossier explicitement accessible.
+
+Le port est déjà utilisé :
+- créez un fichier .env à côté de l'exécutable ;
+- ajoutez par exemple : ASSET_EQUITY_PORT=48630 ;
+- relancez l'application.
+
+La base SQLite ne peut pas être créée :
+- créez un dossier de données, par exemple D:\AssetsEquityBCDC\data ;
+- ajoutez STORAGE_DIR=D:\AssetsEquityBCDC\data dans le fichier .env ;
+- relancez l'application.
+
+HTTPS ne s'ouvre pas :
+- vérifiez que les chemins ASSET_EQUITY_SSL_CERTFILE et ASSET_EQUITY_SSL_KEYFILE sont corrects ;
+- vérifiez que les fichiers sont bien en PEM ;
+- essayez d'abord avec ASSET_EQUITY_HOST=127.0.0.1 ;
+- si le navigateur affiche un avertissement, approuvez le certificat ou utilisez un certificat interne officiel.
+
+11. Livraison recommandée
+-------------------------
+Distribuez toujours l'archive complète :
+
+AssetsEquityBCDC-package.zip
+
+Ne distribuez pas uniquement AssetsEquityBCDC.exe.

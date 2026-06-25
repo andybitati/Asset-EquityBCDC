@@ -21,6 +21,8 @@ export default function NavBar({ active, user, onNavigate, onLogout }) {
       )}
       <button className={active === 'dashboard' ? 'active' : ''} onClick={() => onNavigate('dashboard')}>Dashboard</button>
       <button className={active === 'inventory' ? 'active' : ''} onClick={() => onNavigate('inventory')}>Stock</button>
+      <button className={active === 'serials' ? 'active' : ''} onClick={() => onNavigate('serials')}>Registre séries</button>
+      <button className={active === 'policies' ? 'active' : ''} onClick={() => onNavigate('policies')}>Politiques stock</button>
       <button className={active === 'movements' ? 'active' : ''} onClick={() => onNavigate('movements')}>Mouvements</button>
       <button className={active === 'export' ? 'active' : ''} onClick={() => onNavigate('export')}>Export CSV</button>
       {(user?.role === 'admin' || user?.role === 'auditor') && (

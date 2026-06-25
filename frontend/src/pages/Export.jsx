@@ -4,6 +4,7 @@ import { normalizeBusinessText } from '../utils/text'
 const csvColumns = [
   { key: 'id', label: 'id' },
   { key: 'material_id', label: 'material_id' },
+  { key: 'entry_serial_number_id', label: 'entry_serial_number_id' },
   { key: 'timestamp', label: 'timestamp' },
   { key: 'movement_type', label: 'movement_type' },
   { key: 'equipment_type', label: 'equipment_type' },

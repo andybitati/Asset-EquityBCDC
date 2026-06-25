@@ -14,8 +14,9 @@ function formatApiErrorDetail(detail) {
 }
 
 async function request(path, token, options = {}) {
+  const isFormData = options.body instanceof FormData
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   }
   if (token) {
@@ -51,6 +52,10 @@ export function fetchInventory(token) {
 
 export function fetchStockItems(token) {
   return request('/stock-items', token)
+}
+
+export function fetchSerialRegistry(token) {
+  return request('/serial-registry', token)
 }
 
 export function fetchCurrentUser(token) {
@@ -99,6 +104,17 @@ export function fetchForecast(token) {
   return request('/forecast', token)
 }
 
+export function fetchStockPolicies(token) {
+  return request('/stock-policies', token)
+}
+
+export function updateStockPolicy(token, equipmentType, payload) {
+  return request(`/stock-policies?type=${encodeURIComponent(equipmentType)}`, token, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function fetchMovements(token) {
   return request('/movements', token)
 }
@@ -111,6 +127,19 @@ export function submitEntry(token, payload) {
   return request('/entries', token, {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export function importEntrySerialNumbers(token, payload) {
+  const formData = new FormData()
+  formData.append('type', payload.type)
+  formData.append('file', payload.file)
+  if (payload.notes) {
+    formData.append('notes', payload.notes)
+  }
+  return request('/entries/serial-import', token, {
+    method: 'POST',
+    body: formData,
   })
 }
 

@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { fetchAuditLogs } from '../services/api'
 
+function severityForAction(action) {
+  if (['unknown_serial_exit_attempt', 'login_failure', 'admin_delete_user'].includes(action)) return 'high'
+  if (['import_entry_serial_numbers', 'create_exit', 'admin_update_user'].includes(action)) return 'medium'
+  return 'normal'
+}
+
 export default function AuditPage({ token }) {
   const [logs, setLogs] = useState([])
   const [status, setStatus] = useState('Chargement...')
@@ -29,7 +35,9 @@ export default function AuditPage({ token }) {
               <th>Action</th>
               <th>Entité</th>
               <th>ID</th>
+              <th>Gravité</th>
               <th>IP</th>
+              <th>Détails</th>
             </tr>
           </thead>
           <tbody>
@@ -40,7 +48,9 @@ export default function AuditPage({ token }) {
                 <td>{log.action}</td>
                 <td>{log.entity_type}</td>
                 <td>{log.entity_id || '-'}</td>
+                <td><span className={`severity-pill ${severityForAction(log.action)}`}>{severityForAction(log.action)}</span></td>
                 <td>{log.ip_address || '-'}</td>
+                <td className="details-cell">{log.new_value || '-'}</td>
               </tr>
             ))}
           </tbody>
