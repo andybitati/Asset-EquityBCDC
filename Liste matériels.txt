@@ -1,0 +1,51 @@
+Adaptateur
+Cable d'alimentation
+Cable HDMI (15m)
+Cable HDMI (30m)
+Cable HDMI (3m)
+Cable HDMI (5m)
+Cable locker
+Cable locker (noir)
+Casque
+Chargeur Laptop Tige
+Chargeur Laptop Type C
+Desktop
+Desktop complet (Region Ouest)
+Desktop complet EDRMS
+DVD/CD-R
+Extratime
+Finger
+Flash Disk 16GB
+Imprimante Bixolon
+Imprimante Evolis
+Imprimante Evolis (Libanga)
+Kit Starlink
+Laptop OmniBook
+Laptop OmniBook (Region Ouest)
+Laptop Pavillon
+Laptop ProBook
+Laptop ProBook (Libanga)
+Laptop ProBook (EDRMS)
+Laptop ProBook (Region Ouest)
+Lecteur DVD/CD externe Tecsa
+Moniteur
+Moniteur Diagonal 24 pouces
+Pen BK
+Rouleau Extratime
+Routeur
+Ruban Bixolon
+Ruban monochrome (black 1)
+Ruban monochrome (black 2)
+Ruban monochrome (couleur)
+Ruban monochrome (white)
+Sac Laptop
+Scanner biometrique (Kojak)
+Scanner Ricoh
+Souris avec fil
+Souris sans fil (avec pile)
+Souris sans fil (sans pile)
+Support Laptop
+Switch 24 ports
+Switch 48 ports
+Unité Centrale
+Webcam
