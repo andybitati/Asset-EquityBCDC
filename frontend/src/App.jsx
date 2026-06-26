@@ -51,6 +51,12 @@ export default function App() {
   }, [refreshData])
 
   useEffect(() => {
+    if (user?.role === 'auditor' && ['inventory', 'export'].includes(page)) {
+      setPage('dashboard')
+    }
+  }, [page, user])
+
+  useEffect(() => {
     if (!token) return undefined
     const timer = window.setInterval(refreshData, 15000)
     return () => window.clearInterval(timer)

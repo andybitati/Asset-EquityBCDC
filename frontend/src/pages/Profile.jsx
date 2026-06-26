@@ -41,6 +41,7 @@ export default function ProfilePage({ token, user, refresh }) {
   const [newUser, setNewUser] = useState({ username: '', display_name: '', password: '', role: 'user', photo_url: '' })
   const [users, setUsers] = useState([])
   const [message, setMessage] = useState(null)
+  const canEditOwnProfile = user?.role !== 'auditor'
 
   const uploadPhoto = async (file, applyPhotoUrl) => {
     if (!file) return
@@ -147,50 +148,52 @@ export default function ProfilePage({ token, user, refresh }) {
         <div className="form-panel compact-form">
           <label>
             Identifiant
-            <input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} />
+            <input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} disabled={!canEditOwnProfile} />
           </label>
           <label>
             Nom affiché
-            <input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })} />
+            <input value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })} disabled={!canEditOwnProfile} />
           </label>
           <label>
             Photo utilisateur
-            <input value={form.photo_url} onChange={e => setForm({ ...form, photo_url: e.target.value })} placeholder="URL ou chemin de la photo" />
+            <input value={form.photo_url} onChange={e => setForm({ ...form, photo_url: e.target.value })} placeholder="URL ou chemin de la photo" disabled={!canEditOwnProfile} />
           </label>
-          <div className="photo-tools">
-            <span>Choisir un avatar</span>
-            <div className="avatar-picker">
-              {avatarOptions.map(avatar => (
-                <button
-                  type="button"
-                  key={avatar}
-                  className={form.photo_url === avatar ? 'selected' : ''}
-                  onClick={() => setForm({ ...form, photo_url: avatar })}
-                  aria-label="Choisir cet avatar"
-                >
-                  <img src={avatar} alt="" />
-                </button>
-              ))}
+          {canEditOwnProfile && (
+            <div className="photo-tools">
+              <span>Choisir un avatar</span>
+              <div className="avatar-picker">
+                {avatarOptions.map(avatar => (
+                  <button
+                    type="button"
+                    key={avatar}
+                    className={form.photo_url === avatar ? 'selected' : ''}
+                    onClick={() => setForm({ ...form, photo_url: avatar })}
+                    aria-label="Choisir cet avatar"
+                  >
+                    <img src={avatar} alt="" />
+                  </button>
+                ))}
+              </div>
+              <label className="file-upload">
+                Charger une photo locale
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={e => uploadPhoto(e.target.files?.[0], photo_url => setForm(prev => ({ ...prev, photo_url })))}
+                />
+              </label>
             </div>
-            <label className="file-upload">
-              Charger une photo locale
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                onChange={e => uploadPhoto(e.target.files?.[0], photo_url => setForm(prev => ({ ...prev, photo_url })))}
-              />
-            </label>
-          </div>
+          )}
           <label>
             Mot de passe actuel
-            <input type="password" value={form.current_password} onChange={e => setForm({ ...form, current_password: e.target.value })} />
+            <input type="password" value={form.current_password} onChange={e => setForm({ ...form, current_password: e.target.value })} disabled={!canEditOwnProfile} />
           </label>
           <label>
             Nouveau mot de passe
-            <input type="password" value={form.new_password} onChange={e => setForm({ ...form, new_password: e.target.value })} />
+            <input type="password" value={form.new_password} onChange={e => setForm({ ...form, new_password: e.target.value })} disabled={!canEditOwnProfile} />
           </label>
-          <p className="form-hint">Hors admin, les identifiants ne peuvent être modifiés qu’une fois tous les 3 mois. Le mot de passe doit contenir 8 caractères, une majuscule, un chiffre et un caractère spécial.</p>
-          <button type="button" onClick={saveProfile}>Enregistrer mon profil</button>
+          <p className="form-hint">{canEditOwnProfile ? 'Hors admin, les identifiants ne peuvent être modifiés qu’une fois tous les 3 mois. Le mot de passe doit contenir 8 caractères, une majuscule, un chiffre et un caractère spécial.' : 'Le rôle auditeur est en lecture seule.'}</p>
+          {canEditOwnProfile && <button type="button" onClick={saveProfile}>Enregistrer mon profil</button>}
         </div>
       </div>
 

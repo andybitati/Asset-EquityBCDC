@@ -576,6 +576,8 @@ def get_me(current_user: str = Depends(get_current_user)):
 @app.put("/users/me")
 def update_me(payload: UserProfileUpdate, request: Request, current_user: str = Depends(get_current_user)):
     profile = get_user_profile(current_user)
+    if profile.get("role") == "auditor":
+        raise HTTPException(status_code=403, detail="Accès en lecture seule pour le rôle auditeur.")
     if not can_change_credentials(profile):
         raise HTTPException(
             status_code=400,
@@ -636,6 +638,9 @@ def list_users(current_user: str = Depends(get_current_user)):
 
 @app.post("/users/photo")
 def upload_user_photo(payload: PhotoUpload, request: Request, current_user: str = Depends(get_current_user)):
+    profile = get_user_profile(current_user)
+    if profile.get("role") == "auditor":
+        raise HTTPException(status_code=403, detail="Accès en lecture seule pour le rôle auditeur.")
     photo_url = save_uploaded_photo(payload, current_user)
     audit_log(current_user, "upload_user_photo", "user", current_user, new_value=photo_url, request=request)
     return {"photo_url": photo_url}
@@ -872,7 +877,7 @@ async def import_entry_serial_numbers(
     file: UploadFile = File(...),
     current_user: str = Depends(get_current_user),
 ):
-    require_roles(current_user, {"admin", "manager"})
+    require_roles(current_user, {"admin", "user", "manager"})
     if not is_serialized_type(equipment_type):
         raise HTTPException(
             status_code=400,
@@ -1032,7 +1037,7 @@ def get_serial_registry(
 
 @app.get("/exports/movements.csv")
 def export_movements_csv(request: Request, current_user: str = Depends(get_current_user)):
-    require_roles(current_user, {"admin", "manager", "auditor"})
+    require_roles(current_user, {"admin", "manager"})
     output = io.StringIO()
     output.write("\ufeff")
     writer = csv.writer(output, delimiter=";")

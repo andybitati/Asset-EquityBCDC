@@ -144,7 +144,7 @@ export default function InventoryPage({ token, stockItems = [], serialRegistry =
   const entrySerialNumbers = useMemo(() => parseSerialText(entry.serial_numbers), [entry.serial_numbers])
   const entryRequiresSerials = serializedTypes.has(entry.type)
   const selectedRequiresSerials = Boolean(selectedStockItem && serializedTypes.has(selectedStockItem.equipment_type))
-  const canImportSerials = entryRequiresSerials && (user?.role === 'admin' || user?.role === 'manager')
+  const canImportSerials = entryRequiresSerials && ['admin', 'user', 'manager'].includes(user?.role)
   const serialCounts = serialRegistry.counts || {}
 
   useEffect(() => {

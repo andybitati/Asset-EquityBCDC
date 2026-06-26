@@ -104,20 +104,24 @@ L’application calcule automatiquement une métrique de consommation pour antic
 
 ### Métrique retenue
 
-La métrique principale est la consommation moyenne journalière sur les 30 derniers jours.
+La métrique principale est la consommation moyenne journalière sur les 90 derniers jours.
 
 Pour chaque type de matériel :
 
 ```text
-consommation_moyenne_journaliere = sorties_des_30_derniers_jours / 30
+consommation_moyenne_journaliere = sorties_des_90_derniers_jours / 90
 ```
 
 Exemple :
 
 ```text
-Sorties Laptop sur 30 jours = 15
-Consommation moyenne journalière = 15 / 30 = 0,5 Laptop par jour
+Sorties Laptop sur 90 jours = 45
+Consommation moyenne journalière = 45 / 90 = 0,5 Laptop par jour
 ```
+
+L’application calcule aussi l’écart-type de la demande journalière sur cette même période.
+Cet écart-type mesure la variabilité des sorties : plus les sorties sont irrégulières,
+plus le stock de sécurité doit être élevé.
 
 ### Estimation du nombre de jours avant rupture
 
@@ -135,33 +139,52 @@ Consommation moyenne journalière = 0,5
 Jours avant rupture = 6 / 0,5 = 12 jours
 ```
 
-Si aucune sortie n’a été observée sur les 30 derniers jours, l’application affiche `N/A`, car il n’y a pas assez de consommation récente pour estimer une rupture.
+Si aucune sortie n’a été observée sur les 90 derniers jours, l’application affiche `N/A`,
+car il n’y a pas assez de consommation récente pour estimer une rupture.
 
 ## Seuils automatiques
 
-L’application calcule deux seuils par type de matériel.
+L’application calcule les seuils par type de matériel à partir de paramètres visibles dans
+l’écran `Politiques de stock` :
+
+- délai fournisseur ;
+- nombre de jours couverts par la réserve d’urgence ;
+- stock minimum absolu ;
+- couverture cible ;
+- facteur de service.
+
+Ces seuils ne sont pas arbitraires. Ils combinent la demande moyenne attendue et un stock
+de sécurité lié à l’incertitude de la demande.
 
 ### Seuil de commande
 
 Le seuil de commande indique à partir de quel niveau il faut envisager une nouvelle commande.
 
 ```text
-seuil_commande = max(2, consommation_moyenne_journaliere * 5 + 2)
+demande_delai = consommation_moyenne_journaliere * delai_fournisseur
+stock_securite_commande = ceil(facteur_service * ecart_type_demande * sqrt(delai_fournisseur))
+seuil_commande = max(stock_minimum, ceil(demande_delai + stock_securite_commande))
 ```
 
 Interprétation :
 
-- `consommation_moyenne_journaliere * 5` couvre environ 5 jours de consommation ;
-- `+ 2` ajoute une marge minimale ;
-- `max(2, ...)` garantit qu’un seuil minimum existe même si la consommation récente est faible.
+- `demande_delai` couvre la consommation moyenne prévue pendant l’attente fournisseur ;
+- `stock_securite_commande` ajoute une marge contre les variations de la demande ;
+- `max(stock_minimum, ...)` garantit un niveau minimal même si l’historique récent est faible.
 
 Exemple :
 
 ```text
 Consommation moyenne journalière = 0,5
-Seuil commande = max(2, 0,5 * 5 + 2)
-Seuil commande = max(2, 4,5)
-Seuil commande = 5
+Écart-type de la demande = 1
+Délai fournisseur = 14 jours
+Stock minimum = 2
+Facteur de service = 1,28
+
+Demande délai = 0,5 * 14 = 7
+Stock sécurité commande = ceil(1,28 * 1 * sqrt(14)) = 5
+Seuil commande = max(2, ceil(7 + 5))
+Seuil commande = 12
 ```
 
 Si le stock actuel est inférieur ou égal à ce seuil, le dashboard affiche un risque de pénurie.
@@ -171,54 +194,103 @@ Si le stock actuel est inférieur ou égal à ce seuil, le dashboard affiche un 
 La réserve d’urgence protège un minimum de stock qui ne doit plus être utilisé pour les sorties normales.
 
 ```text
-reserve_urgence = max(1, consommation_moyenne_journaliere * 2 + 1)
+demande_urgence = consommation_moyenne_journaliere * jours_urgence
+stock_securite_urgence = ceil(facteur_service * ecart_type_demande * sqrt(jours_urgence))
+reserve_urgence = max(stock_minimum, ceil(demande_urgence + stock_securite_urgence))
 ```
 
 Interprétation :
 
-- `consommation_moyenne_journaliere * 2` couvre environ 2 jours de consommation ;
-- `+ 1` garde une marge de sécurité ;
-- `max(1, ...)` garantit qu’il reste toujours au moins une unité protégée.
+- `demande_urgence` couvre la consommation moyenne pendant la période d’urgence ;
+- `stock_securite_urgence` protège contre les variations pendant cette période ;
+- `max(stock_minimum, ...)` évite une réserve trop basse.
 
 Exemple :
 
 ```text
 Consommation moyenne journalière = 0,5
-Réserve urgence = max(1, 0,5 * 2 + 1)
-Réserve urgence = max(1, 2)
-Réserve urgence = 2
+Écart-type de la demande = 1
+Jours urgence = 5
+Stock minimum = 2
+Facteur de service = 1,28
+
+Demande urgence = 0,5 * 5 = 2,5
+Stock sécurité urgence = ceil(1,28 * 1 * sqrt(5)) = 3
+Réserve urgence = max(2, ceil(2,5 + 3))
+Réserve urgence = 6
 ```
 
-### Blocage des sorties
+### Facteur de service
 
-Les sorties d’un type de matériel sont bloquées dans deux cas.
+Le facteur de service représente le niveau de prudence appliqué au stock de sécurité.
+Il ne correspond pas à une quantité de matériel, mais à un nombre d’écarts-types ajoutés
+au-dessus de la demande moyenne.
 
-Cas 1 : le stock est déjà à la réserve d’urgence.
+Dans les formules, il apparaît ainsi :
+
+```text
+stock_securite = facteur_service * ecart_type_demande * sqrt(nombre_de_jours)
+```
+
+L’échelle est exprimée en sigma :
+
+```text
+0,00 σ  = aucun stock de sécurité statistique
+1,28 σ  ≈ niveau de service de 90 %
+1,65 σ  ≈ niveau de service de 95 %
+2,05 σ  ≈ niveau de service de 98 %
+2,33 σ  ≈ niveau de service de 99 %
+3,00 σ  ≈ niveau de service de 99,87 %
+4,00 σ  ≈ niveau de service de 99,997 %
+```
+
+L’application accepte un facteur de service entre `0,00` et `4,00`.
+Les valeurs par défaut sont :
+
+```text
+1,28 pour les matériels non sérialisés
+1,65 pour les matériels sérialisés
+```
+
+Un facteur plus élevé réduit le risque de rupture, mais augmente le stock immobilisé.
+Un facteur plus faible limite le stock dormant, mais augmente le risque de rupture.
+Ce paramètre doit donc être choisi selon la criticité du matériel, son coût, son délai de
+remplacement et l’impact métier d’une rupture.
+
+La racine carrée est utilisée parce que l’incertitude ne s’additionne pas comme la demande
+moyenne. Sur plusieurs jours, les moyennes s’additionnent directement :
+
+```text
+demande_moyenne_sur_n_jours = moyenne_journaliere * n
+```
+
+Mais pour la variabilité, ce sont les variances qui s’additionnent. Comme l’écart-type est
+la racine carrée de la variance, l’incertitude totale devient :
+
+```text
+ecart_type_sur_n_jours = ecart_type_journalier * sqrt(n)
+```
+
+Cela évite de surestimer le risque comme si chaque jour défavorable s’accumulait toujours
+dans le même sens.
+
+### Contrôle des sorties proches de la réserve
+
+Les seuils bas ne bloquent pas automatiquement la sortie. Quand le stock atteint la réserve
+d’urgence ou qu’une sortie ferait passer le stock sous cette réserve, l’application demande
+un avis responsable et trace l’opération dans l’audit.
+
+Le contrôle utilisé est :
 
 ```text
 stock_actuel <= reserve_urgence
 ```
 
-Cas 2 : la sortie demandée ferait passer le stock sous la réserve d’urgence.
+ou :
 
 ```text
 stock_actuel - quantite_demandee < reserve_urgence
 ```
-
-Exemple :
-
-```text
-Stock Laptop = 3
-Réserve urgence = 2
-Sortie demandée = 2
-
-Stock après sortie = 3 - 2 = 1
-1 < 2
-
-Sortie refusée
-```
-
-Le stock restant est ainsi conservé pour les cas d’urgence jusqu’à ce que de nouvelles entrées augmentent le stock.
 
 ## Dashboard
 
@@ -507,8 +579,8 @@ Rôles recommandés :
 
 - `admin` : gestion des utilisateurs, supervision, configuration ;
 - `user` : saisie des entrées/sorties et consultation opérationnelle ;
-- `auditor` : consultation seule des mouvements et rapports ;
-- `manager` : consultation des alertes, validations et rapports.
+- `auditor` : consultation seule, sans entrée, sortie, import, export ni modification ;
+- `manager` : consultation des alertes, validations, rapports et actions opérationnelles autorisées.
 
 Une action sensible doit être réservée aux rôles nécessaires uniquement.
 
@@ -648,18 +720,19 @@ Exemples :
 - mouvements de sortie importants ;
 - sorties proches de la réserve d’urgence.
 
-Les sorties sont déjà contrôlées par la réserve d’urgence.
+Les sorties proches de la réserve d’urgence sont contrôlées par l’application.
+Elles demandent un avis responsable et sont tracées dans l’audit.
 
 Rappel :
 
 ```text
-Si stock_actuel <= reserve_urgence, les sorties normales sont bloquées.
+Si stock_actuel <= reserve_urgence, un avis responsable est requis.
 ```
 
 Et :
 
 ```text
-Si stock_actuel - quantite_demandee < reserve_urgence, la sortie est refusée.
+Si stock_actuel - quantite_demandee < reserve_urgence, un avis responsable est requis.
 ```
 
 ### Sauvegarde et restauration

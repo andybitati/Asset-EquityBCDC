@@ -20,6 +20,7 @@ Write-Host "Using python: $python"
 & $python -m PyInstaller --noconfirm AssetsEquityBCDC.spec
 
 $packageDir = Join-Path $ROOT 'dist\AssetsEquityBCDC'
+Copy-Item -LiteralPath (Join-Path $ROOT 'README.md') -Destination $packageDir -Force
 Copy-Item -LiteralPath (Join-Path $ROOT 'docs\INSTALLATION_OFFLINE_FR.txt') -Destination $packageDir -Force
 Copy-Item -LiteralPath (Join-Path $ROOT 'docs\INSTALLATION_OFFLINE_EN.txt') -Destination $packageDir -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $packageDir 'tools') | Out-Null
