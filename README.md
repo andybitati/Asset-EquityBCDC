@@ -571,6 +571,28 @@ Il ne peut pas :
 
 Si un utilisateur perd son mot de passe, la procédure recommandée est une réinitialisation contrôlée via un processus séparé, journalisé et validé par l’équipe habilitée.
 
+### Photos de profil
+
+Les photos de profil peuvent être choisies parmi les avatars proposés ou chargées depuis
+un fichier local.
+
+Règles appliquées :
+
+- formats acceptés : JPG, PNG, WEBP ou GIF ;
+- taille maximale enregistrée : `2 Mo` ;
+- si la photo chargée dépasse `2 Mo`, l’interface tente de la redimensionner et de la
+  compresser automatiquement avant l’envoi ;
+- si la photo reste trop lourde après compression, l’utilisateur doit choisir une image
+  plus petite.
+- pour un utilisateur existant, la photo chargée est immédiatement enregistrée dans la
+  base de données ;
+- lors de la création d’un nouvel utilisateur, la photo est préparée puis enregistrée avec
+  le compte au moment de la création.
+
+L’affichage des photos est prévu pour recadrer proprement les images dans un espace fixe,
+afin d’éviter les déformations ou les débordements dans le menu, le profil et les tableaux
+utilisateurs.
+
 ### Autorisations et séparation des rôles
 
 Le principe du moindre privilège doit être appliqué.

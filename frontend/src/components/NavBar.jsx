@@ -1,3 +1,5 @@
+import { resolvePhotoUrl } from '../utils/photo'
+
 export default function NavBar({ active, user, onNavigate, onLogout }) {
   return (
     <nav className="sidebar">
@@ -12,7 +14,7 @@ export default function NavBar({ active, user, onNavigate, onLogout }) {
       </div>
       {user && (
         <div className="user-profile">
-          <img className="user-avatar" src={user.photo_url || '/avatar-user-red.svg'} alt={user.display_name} />
+          <img className="user-avatar" src={resolvePhotoUrl(user.photo_url)} alt={user.display_name} />
           <div className="user-info">
             <strong>{user.display_name}</strong>
             <span>{user.username}</span>

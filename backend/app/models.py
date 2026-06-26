@@ -124,6 +124,8 @@ class AdminUserCreate(BaseModel):
 class PhotoUpload(BaseModel):
     filename: str
     data_url: str
+    target_username: Optional[str] = None
+    persist: bool = True
 
 
 class StockPolicyUpdate(BaseModel):

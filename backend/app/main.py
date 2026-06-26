@@ -641,9 +641,27 @@ def upload_user_photo(payload: PhotoUpload, request: Request, current_user: str 
     profile = get_user_profile(current_user)
     if profile.get("role") == "auditor":
         raise HTTPException(status_code=403, detail="Accès en lecture seule pour le rôle auditeur.")
-    photo_url = save_uploaded_photo(payload, current_user)
-    audit_log(current_user, "upload_user_photo", "user", current_user, new_value=photo_url, request=request)
-    return {"photo_url": photo_url}
+    target_username = (payload.target_username or current_user).strip()
+    if target_username != current_user:
+        require_admin(current_user)
+    photo_url = save_uploaded_photo(payload, target_username)
+    if payload.persist:
+        try:
+            with engine.begin() as conn:
+                result = conn.execute(
+                    text("UPDATE users SET photo_url = :photo_url, updated_at = :updated_at WHERE username = :username"),
+                    {
+                        "photo_url": photo_url,
+                        "updated_at": datetime.utcnow(),
+                        "username": target_username,
+                    },
+                )
+        except Exception:
+            raise HTTPException(status_code=400, detail="Impossible d'enregistrer la photo dans le profil.")
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Utilisateur introuvable.")
+    audit_log(current_user, "upload_user_photo", "user", target_username, new_value=photo_url, request=request)
+    return {"photo_url": photo_url, "user": get_user_profile(target_username) if payload.persist else None}
 
 
 @app.post("/users")

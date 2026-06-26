@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createUser, deleteUser, fetchUsers, updateCurrentUser, updateUser, uploadUserPhoto } from '../services/api'
+import { resolvePhotoUrl } from '../utils/photo'
 
 const avatarOptions = [
   '/avatar-admin.svg',
@@ -16,6 +17,9 @@ const roleOptions = [
   { value: 'auditor', label: 'Auditeur' },
   { value: 'admin', label: 'Administrateur' },
 ]
+
+const MAX_PROFILE_PHOTO_BYTES = 2 * 1024 * 1024
+const PROFILE_PHOTO_MAX_SIDE = 768
 
 function defaultForm(user) {
   return {
@@ -36,6 +40,51 @@ function readFileAsDataUrl(file) {
   })
 }
 
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Photo illisible.'))
+    image.src = dataUrl
+  })
+}
+
+function dataUrlSize(dataUrl) {
+  const base64 = dataUrl.split(',')[1] || ''
+  return Math.ceil((base64.length * 3) / 4)
+}
+
+async function compressProfilePhoto(file) {
+  const originalDataUrl = await readFileAsDataUrl(file)
+  if (file.size <= MAX_PROFILE_PHOTO_BYTES && dataUrlSize(originalDataUrl) <= MAX_PROFILE_PHOTO_BYTES) {
+    return { filename: file.name, dataUrl: originalDataUrl, compressed: false }
+  }
+
+  const image = await loadImage(originalDataUrl)
+  const scale = Math.min(1, PROFILE_PHOTO_MAX_SIDE / Math.max(image.width, image.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(image.width * scale))
+  canvas.height = Math.max(1, Math.round(image.height * scale))
+
+  const context = canvas.getContext('2d')
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.drawImage(image, 0, 0, canvas.width, canvas.height)
+
+  for (const quality of [0.86, 0.78, 0.7, 0.62, 0.54, 0.46]) {
+    const dataUrl = canvas.toDataURL('image/jpeg', quality)
+    if (dataUrlSize(dataUrl) <= MAX_PROFILE_PHOTO_BYTES) {
+      return {
+        filename: file.name.replace(/\.[^.]+$/, '') + '.jpg',
+        dataUrl,
+        compressed: true,
+      }
+    }
+  }
+
+  throw new Error('La photo reste trop lourde après compression. Choisissez une image plus petite.')
+}
+
 export default function ProfilePage({ token, user, refresh }) {
   const [form, setForm] = useState(defaultForm(user))
   const [newUser, setNewUser] = useState({ username: '', display_name: '', password: '', role: 'user', photo_url: '' })
@@ -43,17 +92,23 @@ export default function ProfilePage({ token, user, refresh }) {
   const [message, setMessage] = useState(null)
   const canEditOwnProfile = user?.role !== 'auditor'
 
-  const uploadPhoto = async (file, applyPhotoUrl) => {
+  const uploadPhoto = async (file, applyPhotoUrl, options = {}) => {
     if (!file) return
     setMessage(null)
     try {
-      const dataUrl = await readFileAsDataUrl(file)
+      const photo = await compressProfilePhoto(file)
       const response = await uploadUserPhoto(token, {
-        filename: file.name,
-        data_url: dataUrl,
+        filename: photo.filename,
+        data_url: photo.dataUrl,
+        target_username: options.targetUsername || null,
+        persist: options.persist !== false,
       })
       applyPhotoUrl(response.photo_url)
-      setMessage('Photo chargée. Pensez à enregistrer le profil.')
+      if (options.persist !== false) {
+        refresh()
+      }
+      const savedText = options.persist === false ? 'chargée' : 'enregistrée'
+      setMessage(photo.compressed ? `Photo compressée et ${savedText}.` : `Photo ${savedText}.`)
     } catch (err) {
       setMessage(err.message || 'Upload de la photo impossible.')
     }
@@ -139,7 +194,7 @@ export default function ProfilePage({ token, user, refresh }) {
 
       <div className="panel profile-panel">
         <div className="profile-preview">
-          <img src={form.photo_url || '/avatar-user-red.svg'} alt={form.display_name || form.username} />
+          <img src={resolvePhotoUrl(form.photo_url)} alt={form.display_name || form.username} />
           <div>
             <h3>{form.display_name || form.username}</h3>
             <span>{user?.role || 'user'}</span>
@@ -235,7 +290,7 @@ export default function ProfilePage({ token, user, refresh }) {
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
-                onChange={e => uploadPhoto(e.target.files?.[0], photo_url => setNewUser(prev => ({ ...prev, photo_url })))}
+                onChange={e => uploadPhoto(e.target.files?.[0], photo_url => setNewUser(prev => ({ ...prev, photo_url })), { persist: false })}
               />
             </label>
           </div>
@@ -255,7 +310,7 @@ export default function ProfilePage({ token, user, refresh }) {
                 <tr key={item.username}>
                   <td>
                     <div className="table-photo-editor">
-                      <img className="table-avatar" src={item.photo_url || '/avatar-user-red.svg'} alt={item.display_name} />
+                      <img className="table-avatar" src={resolvePhotoUrl(item.photo_url)} alt={item.display_name} />
                       <select
                         value={item.photo_url || ''}
                         onChange={e => setUsers(users.map(row => row.username === item.username ? { ...row, photo_url: e.target.value } : row))}
@@ -270,7 +325,11 @@ export default function ProfilePage({ token, user, refresh }) {
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp,image/gif"
-                          onChange={e => uploadPhoto(e.target.files?.[0], photo_url => setUsers(users.map(row => row.username === item.username ? { ...row, photo_url } : row)))}
+                          onChange={e => uploadPhoto(
+                            e.target.files?.[0],
+                            photo_url => setUsers(users.map(row => row.username === item.username ? { ...row, photo_url } : row)),
+                            { targetUsername: item.original_username || item.username },
+                          )}
                         />
                       </label>
                     </div>

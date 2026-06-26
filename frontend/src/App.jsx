@@ -10,6 +10,7 @@ import SerialRegistryPage from './pages/SerialRegistry'
 import StockPoliciesPage from './pages/StockPolicies'
 import NavBar from './components/NavBar'
 import { fetchCurrentUser, fetchInventory, fetchStockItems, fetchSerialRegistry, fetchForecast, fetchStockPolicies, fetchMovements, logoutRequest } from './services/api'
+import { resolvePhotoUrl } from './utils/photo'
 
 const pages = {
   dashboard: DashboardPage,
@@ -141,7 +142,7 @@ export default function App() {
             </div>
             {user && (
               <div className="dashboard-user">
-                <img src={user.photo_url || '/avatar-user-red.svg'} alt={user.display_name} />
+                <img src={resolvePhotoUrl(user.photo_url)} alt={user.display_name} />
                 <div>
                   <strong>{user.display_name || user.username}</strong>
                   <span>{user.role || user.username}</span>
