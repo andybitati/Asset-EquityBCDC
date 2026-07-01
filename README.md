@@ -19,6 +19,13 @@ L’application répond à trois besoins principaux :
 - Base de données : MySQL, avec fallback SQLite si `DATABASE_URL` n’est pas défini
 - Temps réel : WebSocket pour rafraîchir le stock et les indicateurs
 
+## Version reseau
+
+Une version parallele peut etre lancee pour donner acces a l'application depuis les postes du meme reseau interne.
+Elle utilise `start-network.bat`, sert le frontend compile depuis le backend et affiche le lien reseau a partager.
+
+Procedure detaillee : [docs/DEPLOIEMENT_RESEAU.md](docs/DEPLOIEMENT_RESEAU.md).
+
 ## Modèle de données
 
 La base contient les tables principales suivantes :

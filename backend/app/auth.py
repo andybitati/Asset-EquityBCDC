@@ -223,7 +223,10 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
             ).mappings().first()
             if not row or row["revoked_at"]:
                 raise HTTPException(status_code=401, detail="Jeton invalide ou expiré")
-            if datetime.utcnow() >= row["expires_at"]:
+            expires_at = row["expires_at"]
+            if isinstance(expires_at, str):
+                expires_at = datetime.fromisoformat(expires_at)
+            if datetime.utcnow() >= expires_at:
                 conn.execute(
                     text("UPDATE sessions SET revoked_at = :revoked_at WHERE token = :token"),
                     {"revoked_at": datetime.utcnow(), "token": token},

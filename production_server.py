@@ -38,6 +38,14 @@ def public_scheme() -> str:
     return "https" if https_config() else "http"
 
 
+def public_url() -> str:
+    configured_url = os.getenv("ASSET_EQUITY_PUBLIC_URL")
+    if configured_url:
+        return configured_url.rstrip("/")
+    port = int(os.getenv("ASSET_EQUITY_PORT", "48620"))
+    return f"{public_scheme()}://127.0.0.1:{port}"
+
+
 def open_preferred_browser(url: str) -> None:
     if os.name == "nt":
         candidates = [
@@ -55,8 +63,7 @@ def open_preferred_browser(url: str) -> None:
 
 def open_browser():
     time.sleep(2)
-    port = int(os.getenv("ASSET_EQUITY_PORT", "48620"))
-    open_preferred_browser(f"{public_scheme()}://127.0.0.1:{port}")
+    open_preferred_browser(public_url())
 
 
 if __name__ == "__main__":
